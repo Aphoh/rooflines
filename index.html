@@ -123,6 +123,57 @@
         }
 
         .table-wrap { max-height: 350px; overflow-y: auto; }
+
+        .slider-controls {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .slider-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .slider-group label {
+            display: block;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .slider-group label span {
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #ddd;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #4f46e5;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #4f46e5;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
     </style>
 </head>
 <body>
@@ -171,26 +222,15 @@
 
         <div class="card">
             <h2>Max Requests per GPU</h2>
-            <div class="controls">
-                <label>GPU Memory:</label>
-                <select id="gpu-memory">
-                    <option value="24">24 GB</option>
-                    <option value="40">40 GB</option>
-                    <option value="48">48 GB</option>
-                    <option value="80" selected>80 GB</option>
-                    <option value="94">94 GB</option>
-                    <option value="141">141 GB</option>
-                    <option value="192">192 GB</option>
-                </select>
-                <label>Sequence Length:</label>
-                <select id="seq-length">
-                    <option value="4096">4K</option>
-                    <option value="8192">8K</option>
-                    <option value="16384">16K</option>
-                    <option value="32768" selected>32K</option>
-                    <option value="65536">64K</option>
-                    <option value="131072">128K</option>
-                </select>
+            <div class="slider-controls">
+                <div class="slider-group">
+                    <label>GPU Memory: <span id="gpu-memory-value">80 GB</span></label>
+                    <input type="range" id="gpu-memory" min="8" max="256" value="80">
+                </div>
+                <div class="slider-group">
+                    <label>Sequence Length: <span id="seq-length-value">32K</span></label>
+                    <input type="range" id="seq-length" min="10" max="18" value="15" step="0.5">
+                </div>
             </div>
             <div class="chart-container">
                 <canvas id="requestsChart"></canvas>
@@ -596,10 +636,22 @@
             });
         }
 
+        function getSliderValues() {
+            const gpuMemoryGB = parseInt(document.getElementById('gpu-memory').value);
+            const seqLengthExp = parseFloat(document.getElementById('seq-length').value);
+            const seqLength = Math.round(Math.pow(2, seqLengthExp));
+            return { gpuMemoryGB, seqLength };
+        }
+
+        function updateSliderLabels() {
+            const { gpuMemoryGB, seqLength } = getSliderValues();
+            document.getElementById('gpu-memory-value').textContent = gpuMemoryGB + ' GB';
+            document.getElementById('seq-length-value').textContent = (seqLength / 1024) + 'K';
+        }
+
         function renderRequestsChart(modelData, dtype) {
             const ctx = document.getElementById('requestsChart').getContext('2d');
-            const gpuMemoryGB = parseInt(document.getElementById('gpu-memory').value);
-            const seqLength = parseInt(document.getElementById('seq-length').value);
+            const { gpuMemoryGB, seqLength } = getSliderValues();
             const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024;
 
             const requestCounts = modelData.map(m => {
@@ -734,10 +786,11 @@
         document.getElementById('add-btn').addEventListener('click', addModel);
         document.getElementById('model-path').addEventListener('keypress', e => { if (e.key === 'Enter') addModel(); });
         document.getElementById('dtype').addEventListener('change', render);
-        document.getElementById('gpu-memory').addEventListener('change', render);
-        document.getElementById('seq-length').addEventListener('change', render);
+        document.getElementById('gpu-memory').addEventListener('input', () => { updateSliderLabels(); render(); });
+        document.getElementById('seq-length').addEventListener('input', () => { updateSliderLabels(); render(); });
 
         initModels();
+        updateSliderLabels();
         render();
     </script>
 </body>
