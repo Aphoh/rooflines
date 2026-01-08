@@ -471,14 +471,16 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
-                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: function(ctx) {
-                                    const m = modelData[ctx.dataIndex];
-                                    let label = ctx.raw.toLocaleString() + ' bytes/token';
+                                title: function(items) {
+                                    return items[0]?.label || '';
+                                },
+                                label: function(context) {
+                                    const m = modelData[context.dataIndex];
+                                    let label = context.raw.toLocaleString() + ' bytes/token';
                                     if (m.result.useMLA) label += ' (MLA)';
                                     else if (m.result.hasHybrid) label += ' (Hybrid)';
                                     else if (m.result.slidingWindow) label += ' (SWA)';
@@ -499,7 +501,7 @@
             const ctx = document.getElementById('lineChart').getContext('2d');
             
             const seqLens = [];
-            for (let i = 8; i <= 20; i += 0.5) seqLens.push(Math.round(Math.pow(2, i)));
+            for (let i = 8; i <= 17; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
 
             const datasets = modelData.map((m, idx) => ({
                 label: m.name,
@@ -520,7 +522,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } },
                         tooltip: {
@@ -532,8 +534,8 @@
                                     }
                                     return '';
                                 },
-                                label: function(ctx) {
-                                    return ctx.dataset.label + ': ' + formatBytes(ctx.raw.y);
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + formatBytes(context.raw.y);
                                 }
                             }
                         }
@@ -542,12 +544,20 @@
                         x: {
                             type: 'logarithmic',
                             title: { display: true, text: 'Sequence Length' },
-                            ticks: { callback: v => [256,1024,4096,16384,65536,262144].includes(v) ? (v>=1024?(v/1024)+'K':v) : '' }
+                            ticks: { 
+                                callback: function(v) {
+                                    if ([256, 1024, 4096, 16384, 65536, 131072].includes(v)) {
+                                        return v >= 1024 ? (v/1024) + 'K' : v;
+                                    }
+                                    return '';
+                                }
+                            }
                         },
                         y: {
-                            type: 'logarithmic',
+                            type: 'linear',
                             title: { display: true, text: 'KV Cache Size' },
-                            ticks: { callback: v => formatBytes(v) }
+                            ticks: { callback: v => formatBytes(v) },
+                            beginAtZero: true
                         }
                     }
                 }
