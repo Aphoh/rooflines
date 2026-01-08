@@ -170,6 +170,34 @@
         </div>
 
         <div class="card">
+            <h2>Max Requests per GPU</h2>
+            <div class="controls">
+                <label>GPU Memory:</label>
+                <select id="gpu-memory">
+                    <option value="24">24 GB</option>
+                    <option value="40">40 GB</option>
+                    <option value="48">48 GB</option>
+                    <option value="80" selected>80 GB</option>
+                    <option value="94">94 GB</option>
+                    <option value="141">141 GB</option>
+                    <option value="192">192 GB</option>
+                </select>
+                <label>Sequence Length:</label>
+                <select id="seq-length">
+                    <option value="4096">4K</option>
+                    <option value="8192">8K</option>
+                    <option value="16384">16K</option>
+                    <option value="32768" selected>32K</option>
+                    <option value="65536">64K</option>
+                    <option value="131072">128K</option>
+                </select>
+            </div>
+            <div class="chart-container">
+                <canvas id="requestsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>Model Details</h2>
             <div class="table-wrap">
                 <table>
@@ -337,7 +365,7 @@
 
         let models = {};
         let customModels = {};
-        let barChart, lineChart;
+        let barChart, lineChart, requestsChart;
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -447,6 +475,7 @@
 
             renderBarChart(modelData, dtype);
             renderLineChart(modelData, dtype);
+            renderRequestsChart(modelData, dtype);
             renderTable(modelData);
         }
 
@@ -567,6 +596,62 @@
             });
         }
 
+        function renderRequestsChart(modelData, dtype) {
+            const ctx = document.getElementById('requestsChart').getContext('2d');
+            const gpuMemoryGB = parseInt(document.getElementById('gpu-memory').value);
+            const seqLength = parseInt(document.getElementById('seq-length').value);
+            const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024;
+
+            const requestCounts = modelData.map(m => {
+                const kvPerRequest = getKVCacheAtSeqLen(m.result, seqLength, dtype);
+                return Math.floor(gpuMemoryBytes / kvPerRequest);
+            });
+
+            // Sort by request count descending for this chart
+            const sorted = modelData.map((m, i) => ({ ...m, requests: requestCounts[i] }))
+                .sort((a, b) => b.requests - a.requests);
+
+            if (requestsChart) requestsChart.destroy();
+            requestsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(m => m.name),
+                    datasets: [{
+                        data: sorted.map(m => m.requests),
+                        backgroundColor: sorted.map(m => {
+                            if (m.result.useMLA) return '#c084fc';
+                            if (m.result.slidingWindow) return '#fbbf24';
+                            return '#4ade80';
+                        })
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(items) {
+                                    return items[0]?.label || '';
+                                },
+                                label: function(context) {
+                                    const m = sorted[context.dataIndex];
+                                    const kvSize = getKVCacheAtSeqLen(m.result, seqLength, dtype);
+                                    return `${context.raw.toLocaleString()} requests (${formatBytes(kvSize)}/req)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: 'Max Concurrent Requests' } },
+                        y: { ticks: { font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
         function renderTable(modelData) {
             const tbody = document.getElementById('model-tbody');
             const ctx128k = 131072;
@@ -649,6 +734,8 @@
         document.getElementById('add-btn').addEventListener('click', addModel);
         document.getElementById('model-path').addEventListener('keypress', e => { if (e.key === 'Enter') addModel(); });
         document.getElementById('dtype').addEventListener('change', render);
+        document.getElementById('gpu-memory').addEventListener('change', render);
+        document.getElementById('seq-length').addEventListener('change', render);
 
         initModels();
         render();
