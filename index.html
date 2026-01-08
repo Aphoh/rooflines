@@ -261,7 +261,7 @@
             <div class="legend-note">
                 <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
                 <span class="badge badge-mha">MHA</span> Multi-Head Attention |
-                <span class="badge badge-swa">SWA/Hybrid</span> Sliding Window
+                <span class="badge badge-swa">SWA/Hybrid-SWA</span> Sliding Window
             </div>
         </div>
     </div>
@@ -531,7 +531,7 @@
                                     const m = modelData[context.dataIndex];
                                     let label = context.raw.toLocaleString() + ' bytes/token';
                                     if (m.result.useMLA) label += ' (MLA)';
-                                    else if (m.result.hasHybrid) label += ' (Hybrid)';
+                                    else if (m.result.hasHybrid) label += ' (Hybrid-SWA)';
                                     else if (m.result.slidingWindow) label += ' (SWA)';
                                     return label;
                                 }
@@ -694,7 +694,7 @@
                 
                 let typeClass, typeText;
                 if (r.useMLA) { typeClass = 'badge-mla'; typeText = 'MLA'; }
-                else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hybrid'; }
+                else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hybrid-SWA'; }
                 else if (r.slidingWindow) { typeClass = 'badge-swa'; typeText = 'SWA'; }
                 else { typeClass = 'badge-mha'; typeText = 'MHA'; }
                 
