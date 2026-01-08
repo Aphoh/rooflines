@@ -334,7 +334,7 @@
                 head_dim: 64,
                 hidden_size: 2880,
                 max_position_embeddings: 131072,
-                sliding_window: 128,
+                sliding_window: 4096,  // initial_context_length is the SWA size
                 // Alternating sliding/full attention: 18 sliding + 18 full layers
                 layer_types: ["sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention"],
             },

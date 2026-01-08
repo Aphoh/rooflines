@@ -119,7 +119,7 @@ MODELS = {
         "head_dim": 64,
         "hidden_size": 2880,
         "max_position_embeddings": 131072,
-        "sliding_window": 128,
+        "sliding_window": 4096,  # initial_context_length is the SWA size
         # Alternating sliding/full attention: 18 sliding + 18 full layers
         "layer_types": ["sliding_attention","full_attention"] * 18,
     },
@@ -239,7 +239,7 @@ MODELS = {
 
 # Expected values for verification
 EXPECTED = {
-    "GPT-OSS-120B": {"bf16": 2 * 36 * 8 * 64 * 2, "fp8": 2 * 36 * 8 * 64, "use_mla": False, "sliding_window": 128},  # 36864, 18432 (hybrid: 18 full + 18 sliding)
+    "GPT-OSS-120B": {"bf16": 2 * 36 * 8 * 64 * 2, "fp8": 2 * 36 * 8 * 64, "use_mla": False, "sliding_window": 4096},  # 73728, 36864 (hybrid: 18 full + 18 sliding)
     "DeepSeek-V3": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},       # 70272, 35136
     "DeepSeek-R1": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},       # 70272, 35136
     "Kimi-K2": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},           # 70272, 35136
