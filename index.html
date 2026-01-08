@@ -28,17 +28,7 @@
             margin-bottom: 1rem;
         }
 
-        .charts-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-
-        @media (max-width: 900px) {
-            .charts-grid { grid-template-columns: 1fr; }
-        }
-
-        .chart-container { height: 350px; }
+        .chart-container { height: 400px; }
 
         table {
             width: 100%;
@@ -165,18 +155,17 @@
             </div>
         </div>
 
-        <div class="charts-grid">
-            <div class="card">
-                <h2>KV Cache Bytes per Token</h2>
-                <div class="chart-container">
-                    <canvas id="barChart"></canvas>
-                </div>
+        <div class="card">
+            <h2>KV Cache Bytes per Token</h2>
+            <div class="chart-container">
+                <canvas id="barChart"></canvas>
             </div>
-            <div class="card">
-                <h2>KV Cache Size vs Sequence Length</h2>
-                <div class="chart-container">
-                    <canvas id="lineChart"></canvas>
-                </div>
+        </div>
+
+        <div class="card">
+            <h2>KV Cache Size vs Sequence Length</h2>
+            <div class="chart-container">
+                <canvas id="lineChart"></canvas>
             </div>
         </div>
 
@@ -482,7 +471,22 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
-                    plugins: { legend: { display: false } },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const m = modelData[ctx.dataIndex];
+                                    let label = ctx.raw.toLocaleString() + ' bytes/token';
+                                    if (m.result.useMLA) label += ' (MLA)';
+                                    else if (m.result.hasHybrid) label += ' (Hybrid)';
+                                    else if (m.result.slidingWindow) label += ' (SWA)';
+                                    return label;
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         x: { title: { display: true, text: 'Bytes/Token' } },
                         y: { ticks: { font: { size: 10 } } }
@@ -503,7 +507,9 @@
                 borderColor: m.color,
                 fill: false,
                 pointRadius: 0,
-                borderWidth: 1.5,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: m.color,
+                borderWidth: 2,
                 borderDash: m.result.slidingWindow ? [4, 4] : []
             }));
 
@@ -514,9 +520,23 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false, axis: 'x' },
                     plugins: {
                         legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } },
-                        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatBytes(ctx.raw.y)}` } }
+                        tooltip: {
+                            callbacks: {
+                                title: function(items) {
+                                    if (items.length > 0) {
+                                        const x = items[0].raw.x;
+                                        return x >= 1024 ? (x/1024).toLocaleString() + 'K tokens' : x + ' tokens';
+                                    }
+                                    return '';
+                                },
+                                label: function(ctx) {
+                                    return ctx.dataset.label + ': ' + formatBytes(ctx.raw.y);
+                                }
+                            }
+                        }
                     },
                     scales: {
                         x: {
