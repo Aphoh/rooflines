@@ -501,7 +501,7 @@
             const ctx = document.getElementById('lineChart').getContext('2d');
             
             const seqLens = [];
-            for (let i = 8; i <= 17; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
+            for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
 
             const datasets = modelData.map((m, idx) => ({
                 label: m.name,
@@ -530,7 +530,7 @@
                                 title: function(items) {
                                     if (items.length > 0) {
                                         const x = items[0].raw.x;
-                                        return x >= 1024 ? (x/1024).toLocaleString() + 'K tokens' : x + ' tokens';
+                                        return (x/1024) + 'K tokens';
                                     }
                                     return '';
                                 },
@@ -544,20 +544,23 @@
                         x: {
                             type: 'logarithmic',
                             title: { display: true, text: 'Sequence Length' },
+                            min: 1024,
+                            max: 262144,
                             ticks: { 
                                 callback: function(v) {
-                                    if ([256, 1024, 4096, 16384, 65536, 131072].includes(v)) {
-                                        return v >= 1024 ? (v/1024) + 'K' : v;
+                                    // 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K
+                                    const validTicks = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
+                                    if (validTicks.includes(v)) {
+                                        return (v/1024) + 'K';
                                     }
                                     return '';
                                 }
                             }
                         },
                         y: {
-                            type: 'linear',
+                            type: 'logarithmic',
                             title: { display: true, text: 'KV Cache Size' },
-                            ticks: { callback: v => formatBytes(v) },
-                            beginAtZero: true
+                            ticks: { callback: v => formatBytes(v) }
                         }
                     }
                 }
