@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KV Cache Calculator</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .input-wrapper {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        input::placeholder {
+            color: var(--text-muted);
+        }
+
+        button {
+            padding: 0.875rem 2rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.visible {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .model-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-item {
+            background: var(--bg);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .kv-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .kv-card {
+            background: linear-gradient(135deg, var(--bg) 0%, var(--bg-card) 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .kv-card h3 {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dtype-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .dtype-bf16 {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .dtype-fp8 {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .kv-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .kv-unit {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .kv-detail {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .detail-label {
+            color: var(--text-muted);
+        }
+
+        .attention-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 20px;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            margin-right: 0.5rem;
+        }
+
+        .attention-type.mla {
+            background: rgba(168, 85, 247, 0.2);
+            color: #c084fc;
+        }
+
+        .attention-type.mha {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .attention-type.swa {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        .loading.visible {
+            display: flex;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .formula-section {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .formula-title {
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .context-input {
+            margin-top: 1rem;
+        }
+
+        .total-memory {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+            border-radius: 12px;
+            border: 1px solid var(--primary);
+        }
+
+        .total-memory h3 {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .memory-item {
+            text-align: center;
+        }
+
+        .memory-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .memory-label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .tp-input {
+            max-width: 120px;
+        }
+
+        .examples {
+            margin-top: 1rem;
+        }
+
+        .examples-title {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .example-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .example-chip {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .example-chip:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .example-chip.mla {
+            border-color: rgba(168, 85, 247, 0.5);
+        }
+
+        .example-chip.mha {
+            border-color: rgba(34, 197, 94, 0.5);
+        }
+
+        .example-chip.swa {
+            border-color: rgba(245, 158, 11, 0.5);
+        }
+
+        .swa-note {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .swa-note-title {
+            color: #fbbf24;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .swa-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .swa-column {
+            background: var(--bg);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .swa-column-title {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KV Cache Calculator</h1>
+            <p class="subtitle">Calculate KV cache memory requirements for LLM models</p>
+        </header>
+
+        <div class="card">
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <label for="model-path">Hugging Face Model Path</label>
+                    <input type="text" id="model-path" placeholder="e.g., deepseek-ai/DeepSeek-V3" autocomplete="off">
+                </div>
+                <div class="input-wrapper tp-input">
+                    <label for="tp-size">TP Size</label>
+                    <input type="number" id="tp-size" value="1" min="1" max="64">
+                </div>
+            </div>
+            
+            <div class="examples">
+                <div class="examples-title">🔗 MLA Models (click to try)</div>
+                <div class="example-chips">
+                    <span class="example-chip mla" data-model="deepseek-ai/DeepSeek-V3">DeepSeek-V3</span>
+                    <span class="example-chip mla" data-model="deepseek-ai/DeepSeek-R1">DeepSeek-R1</span>
+                    <span class="example-chip mla" data-model="deepseek-ai/DeepSeek-V2-Lite">DeepSeek-V2-Lite</span>
+                    <span class="example-chip mla" data-model="moonshotai/Kimi-K2-Instruct">Kimi K2</span>
+                </div>
+            </div>
+
+            <div class="examples" style="margin-top: 0.75rem;">
+                <div class="examples-title">🧠 MHA Models</div>
+                <div class="example-chips">
+                    <span class="example-chip mha" data-model="THUDM/glm-4-9b-chat-hf">GLM-4</span>
+                    <span class="example-chip mha" data-model="MiniMaxAI/MiniMax-M1-40k">MiniMax-M1</span>
+                    <span class="example-chip mha" data-model="Xiaomi/MiMo-7B-RL">MiMo-7B</span>
+                    <span class="example-chip mha" data-model="meta-llama/Llama-3.1-70B-Instruct">Llama 3.1 70B</span>
+                    <span class="example-chip mha" data-model="meta-llama/Llama-3.1-8B-Instruct">Llama 3.1 8B</span>
+                    <span class="example-chip mha" data-model="Qwen/Qwen2.5-72B-Instruct">Qwen2.5 72B</span>
+                </div>
+            </div>
+
+            <div class="examples" style="margin-top: 0.75rem;">
+                <div class="examples-title">🪟 Sliding Window Attention Models</div>
+                <div class="example-chips">
+                    <span class="example-chip swa" data-model="mistralai/Mistral-7B-Instruct-v0.3">Mistral 7B</span>
+                    <span class="example-chip swa" data-model="mistralai/Mixtral-8x7B-Instruct-v0.1">Mixtral 8x7B</span>
+                    <span class="example-chip swa" data-model="google/gemma-2-9b-it">Gemma 2 9B</span>
+                    <span class="example-chip swa" data-model="google/gemma-2-27b-it">Gemma 2 27B</span>
+                </div>
+            </div>
+
+            <div class="context-input">
+                <label for="context-length">Context Length (tokens) - optional, uses model default if empty</label>
+                <input type="number" id="context-length" placeholder="e.g., 131072" min="1">
+            </div>
+
+            <div class="btn-row">
+                <button id="calculate-btn">Calculate KV Cache</button>
+            </div>
+
+            <div class="error-message" id="error-message"></div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <span>Fetching model config...</span>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <div class="card">
+                <h2 style="margin-bottom: 1rem;">Model Configuration</h2>
+                
+                <div id="attention-type-badge"></div>
+                
+                <div class="model-info" id="model-info"></div>
+
+                <div class="formula-section">
+                    <div class="formula-title">Formula Used:</div>
+                    <div id="formula"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 style="margin-bottom: 1.5rem;">KV Cache per Token</h2>
+                <div class="kv-results" id="kv-results"></div>
+                <div id="swa-note"></div>
+            </div>
+
+            <div class="card total-memory">
+                <h3>Total KV Cache Memory for Context Length: <span id="context-display"></span> tokens</h3>
+                <div class="memory-grid" id="memory-grid"></div>
+                <div id="swa-memory-note"></div>
+            </div>
+        </div>
+
+        <footer>
+            <p>
+                Calculates KV cache memory requirements for transformer models.<br>
+                Supports MHA, MLA, and Sliding Window Attention architectures.<br>
+                <a href="https://github.com" target="_blank">View on GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // MLA architectures that use compressed KV cache
+        const MLA_ARCHITECTURES = [
+            // DeepSeek family
+            'DeepseekV2ForCausalLM',
+            'DeepseekV32ForCausalLM', 
+            'DeepseekV3ForCausalLM',
+            'DeepseekV3ForCausalLMNextN',
+            'DeepseekVL2ForCausalLM',
+            // Longcat
+            'LongcatFlashForCausalLM',
+            'LongcatFlashForCausalLMNextN',
+            // Dots
+            'DotsVLMForCausalLM',
+            // Mistral Large 3 (uses MLA)
+            'MistralLarge3ForCausalLM',
+            'PixtralForConditionalGeneration',
+            'MistralLarge3ForCausalLMEagle',
+            // MiniCPM3
+            'MiniCPM3ForCausalLM',
+            // Kimi
+            'KimiVLForConditionalGeneration',
+            'KimiLinearForCausalLM',  // Kimi K2
+        ];
+
+        const BYTES_PER_DTYPE = {
+            'bf16': 2,
+            'fp16': 2,
+            'fp8': 1,
+            'int8': 1,
+            'fp32': 4
+        };
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatNumber(num) {
+            return num.toLocaleString();
+        }
+
+        function isMLA(architectures) {
+            if (!architectures) return false;
+            return architectures.some(arch => MLA_ARCHITECTURES.includes(arch));
+        }
+
+        function getSlidingWindow(config) {
+            // Check for sliding window in config
+            // Can be a number or an array (Mistral style)
+            let sw = config.sliding_window;
+            if (sw === null || sw === undefined) {
+                // Check text_config for multimodal models
+                if (config.text_config) {
+                    sw = config.text_config.sliding_window;
+                }
+            }
+            
+            // Handle array format (Mistral uses this)
+            if (Array.isArray(sw)) {
+                // Find first non-null value
+                sw = sw.find(v => v !== null && v !== undefined);
+            }
+            
+            return sw || null;
+        }
+
+        function getContextLength(config) {
+            // Try various config keys for context length
+            const keys = [
+                'max_position_embeddings',
+                'max_seq_len',
+                'max_sequence_length',
+                'n_positions',
+                'seq_length'
+            ];
+            
+            for (const key of keys) {
+                if (config[key]) return config[key];
+            }
+            
+            // Check text_config for multimodal models
+            if (config.text_config) {
+                for (const key of keys) {
+                    if (config.text_config[key]) return config.text_config[key];
+                }
+            }
+            
+            return 4096; // Default fallback
+        }
+
+        function getTextConfig(config) {
+            // For multimodal models, use text_config
+            if (config.text_config) {
+                return { ...config, ...config.text_config };
+            }
+            return config;
+        }
+
+        function calculateKVCache(config, tpSize = 1) {
+            const textConfig = getTextConfig(config);
+            const architectures = config.architectures || [];
+            const useMLA = isMLA(architectures);
+            const slidingWindow = getSlidingWindow(config);
+            
+            const numLayers = textConfig.num_hidden_layers || textConfig.n_layer || 32;
+            const numKVHeads = textConfig.num_key_value_heads || textConfig.num_attention_heads || 32;
+            const defaultHeadDim = textConfig.hidden_size ? Math.floor(textConfig.hidden_size / (textConfig.num_attention_heads || 32)) : 128;
+            const headDim = textConfig.head_dim || defaultHeadDim;
+            
+            let kvBytesPerTokenBf16, kvBytesPerTokenFp8;
+            let formula, modelInfo;
+            
+            if (useMLA) {
+                // MLA uses compressed KV cache
+                const kvLoraRank = textConfig.kv_lora_rank || 512;
+                const qkRopeHeadDim = textConfig.qk_rope_head_dim || 64;
+                const latentDim = kvLoraRank + qkRopeHeadDim;
+                
+                kvBytesPerTokenBf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
+                kvBytesPerTokenFp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
+                
+                formula = `MLA KV Cache = num_layers × (kv_lora_rank + qk_rope_head_dim) × bytes_per_element
+= ${numLayers} × (${kvLoraRank} + ${qkRopeHeadDim}) × bytes
+= ${numLayers} × ${latentDim} × bytes
+
+BF16: ${numLayers} × ${latentDim} × 2 = ${formatNumber(kvBytesPerTokenBf16)} bytes/token
+FP8:  ${numLayers} × ${latentDim} × 1 = ${formatNumber(kvBytesPerTokenFp8)} bytes/token`;
+                
+                modelInfo = {
+                    'Architecture': architectures[0] || 'Unknown',
+                    'Attention Type': 'MLA (Multi-head Latent Attention)',
+                    'Num Layers': numLayers,
+                    'KV LoRA Rank': kvLoraRank,
+                    'QK Rope Head Dim': qkRopeHeadDim,
+                    'Latent Dim (KV size)': latentDim,
+                    'Num Attention Heads': textConfig.num_attention_heads || 'N/A',
+                    'Hidden Size': textConfig.hidden_size || 'N/A'
+                };
+                
+                if (textConfig.qk_nope_head_dim) {
+                    modelInfo['QK Nope Head Dim'] = textConfig.qk_nope_head_dim;
+                }
+                if (textConfig.v_head_dim) {
+                    modelInfo['V Head Dim'] = textConfig.v_head_dim;
+                }
+            } else {
+                // Standard MHA: 2 (K and V) × num_layers × num_kv_heads × head_dim × bytes
+                const kvHeadsPerTP = Math.max(1, Math.floor(numKVHeads / tpSize));
+                
+                kvBytesPerTokenBf16 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
+                kvBytesPerTokenFp8 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
+                
+                formula = `MHA KV Cache (per GPU) = 2 × num_layers × num_kv_heads_per_tp × head_dim × bytes_per_element
+= 2 × ${numLayers} × ${kvHeadsPerTP} × ${headDim} × bytes
+
+BF16: 2 × ${numLayers} × ${kvHeadsPerTP} × ${headDim} × 2 = ${formatNumber(kvBytesPerTokenBf16)} bytes/token
+FP8:  2 × ${numLayers} × ${kvHeadsPerTP} × ${headDim} × 1 = ${formatNumber(kvBytesPerTokenFp8)} bytes/token`;
+                
+                if (tpSize > 1) {
+                    formula += `\n\n(num_kv_heads_per_tp = max(1, ${numKVHeads} / ${tpSize}) = ${kvHeadsPerTP})`;
+                }
+                
+                if (slidingWindow) {
+                    formula += `\n\n⚠️ SLIDING WINDOW ATTENTION (window_size = ${formatNumber(slidingWindow)})
+- For seq_len ≤ ${formatNumber(slidingWindow)}: KV cache grows linearly at above rate
+- For seq_len > ${formatNumber(slidingWindow)}: KV cache is BOUNDED at ${formatNumber(slidingWindow)} tokens
+  → Max BF16: ${formatBytes(kvBytesPerTokenBf16 * slidingWindow)}
+  → Max FP8:  ${formatBytes(kvBytesPerTokenFp8 * slidingWindow)}`;
+                }
+                
+                modelInfo = {
+                    'Architecture': architectures[0] || 'Unknown',
+                    'Attention Type': slidingWindow ? 'MHA + Sliding Window' : 'MHA (Multi-Head Attention)',
+                    'Num Layers': numLayers,
+                    'Num KV Heads (total)': numKVHeads,
+                    'Num KV Heads (per GPU)': kvHeadsPerTP,
+                    'Head Dim': headDim,
+                    'Num Attention Heads': textConfig.num_attention_heads || 'N/A',
+                    'Hidden Size': textConfig.hidden_size || 'N/A'
+                };
+                
+                if (slidingWindow) {
+                    modelInfo['Sliding Window Size'] = slidingWindow;
+                }
+            }
+            
+            return {
+                bf16: kvBytesPerTokenBf16,
+                fp8: kvBytesPerTokenFp8,
+                formula,
+                modelInfo,
+                useMLA,
+                slidingWindow,
+                contextLength: getContextLength(textConfig)
+            };
+        }
+
+        async function fetchModelConfig(modelPath) {
+            const configUrl = `https://huggingface.co/${modelPath}/raw/main/config.json`;
+            
+            const response = await fetch(configUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
+            }
+            
+            return await response.json();
+        }
+
+        function displayResults(results, contextLength) {
+            const resultsDiv = document.getElementById('results');
+            const modelInfoDiv = document.getElementById('model-info');
+            const kvResultsDiv = document.getElementById('kv-results');
+            const formulaDiv = document.getElementById('formula');
+            const attentionBadgeDiv = document.getElementById('attention-type-badge');
+            const contextDisplay = document.getElementById('context-display');
+            const memoryGrid = document.getElementById('memory-grid');
+            const swaNoteDiv = document.getElementById('swa-note');
+            const swaMemoryNoteDiv = document.getElementById('swa-memory-note');
+            
+            // Attention type badges
+            let badges = '';
+            if (results.useMLA) {
+                badges += `<span class="attention-type mla">🔗 MLA Architecture (Compressed KV Cache)</span>`;
+            } else {
+                badges += `<span class="attention-type mha">🧠 MHA Architecture</span>`;
+            }
+            if (results.slidingWindow) {
+                badges += `<span class="attention-type swa">🪟 Sliding Window (${formatNumber(results.slidingWindow)} tokens)</span>`;
+            }
+            attentionBadgeDiv.innerHTML = badges;
+            
+            // Model info
+            modelInfoDiv.innerHTML = Object.entries(results.modelInfo)
+                .map(([key, value]) => `
+                    <div class="info-item">
+                        <div class="info-label">${key}</div>
+                        <div class="info-value">${typeof value === 'number' ? formatNumber(value) : value}</div>
+                    </div>
+                `).join('');
+            
+            // Formula
+            formulaDiv.textContent = results.formula;
+            
+            // KV cache per token results
+            kvResultsDiv.innerHTML = `
+                <div class="kv-card">
+                    <h3><span class="dtype-badge dtype-bf16">BF16</span> KV Cache per Token</h3>
+                    <div class="kv-value">${formatNumber(results.bf16)}</div>
+                    <div class="kv-unit">bytes per token (per GPU)</div>
+                    <div class="kv-detail">
+                        <div class="detail-row">
+                            <span class="detail-label">Bytes per element:</span>
+                            <span>2</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="kv-card">
+                    <h3><span class="dtype-badge dtype-fp8">FP8</span> KV Cache per Token</h3>
+                    <div class="kv-value">${formatNumber(results.fp8)}</div>
+                    <div class="kv-unit">bytes per token (per GPU)</div>
+                    <div class="kv-detail">
+                        <div class="detail-row">
+                            <span class="detail-label">Bytes per element:</span>
+                            <span>1</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Savings vs BF16:</span>
+                            <span>50%</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // SWA note
+            if (results.slidingWindow) {
+                const maxBf16 = results.bf16 * results.slidingWindow;
+                const maxFp8 = results.fp8 * results.slidingWindow;
+                swaNoteDiv.innerHTML = `
+                    <div class="swa-note">
+                        <div class="swa-note-title">🪟 Sliding Window Attention Behavior</div>
+                        <p>This model uses sliding window attention with a window size of <strong>${formatNumber(results.slidingWindow)}</strong> tokens.</p>
+                        <div class="swa-comparison">
+                            <div class="swa-column">
+                                <div class="swa-column-title">Before Window Size (seq ≤ ${formatNumber(results.slidingWindow)})</div>
+                                <p>KV cache grows linearly:<br>
+                                <strong>BF16:</strong> ${formatNumber(results.bf16)} bytes × seq_len<br>
+                                <strong>FP8:</strong> ${formatNumber(results.fp8)} bytes × seq_len</p>
+                            </div>
+                            <div class="swa-column">
+                                <div class="swa-column-title">After Window Size (seq > ${formatNumber(results.slidingWindow)})</div>
+                                <p>KV cache is bounded:<br>
+                                <strong>BF16:</strong> ${formatBytes(maxBf16)} (max)<br>
+                                <strong>FP8:</strong> ${formatBytes(maxFp8)} (max)</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                swaNoteDiv.innerHTML = '';
+            }
+            
+            // Total memory for context
+            const usedContextLength = contextLength || results.contextLength;
+            contextDisplay.textContent = formatNumber(usedContextLength);
+            
+            let effectiveTokens = usedContextLength;
+            let isBounded = false;
+            if (results.slidingWindow && usedContextLength > results.slidingWindow) {
+                effectiveTokens = results.slidingWindow;
+                isBounded = true;
+            }
+            
+            const totalBf16 = results.bf16 * effectiveTokens;
+            const totalFp8 = results.fp8 * effectiveTokens;
+            
+            memoryGrid.innerHTML = `
+                <div class="memory-item">
+                    <div class="memory-value" style="color: #60a5fa;">${formatBytes(totalBf16)}</div>
+                    <div class="memory-label">BF16 Total (per GPU)</div>
+                </div>
+                <div class="memory-item">
+                    <div class="memory-value" style="color: #4ade80;">${formatBytes(totalFp8)}</div>
+                    <div class="memory-label">FP8 Total (per GPU)</div>
+                </div>
+                <div class="memory-item">
+                    <div class="memory-value" style="color: #f59e0b;">${formatBytes(totalBf16 - totalFp8)}</div>
+                    <div class="memory-label">FP8 Savings (per GPU)</div>
+                </div>
+            `;
+            
+            if (isBounded) {
+                swaMemoryNoteDiv.innerHTML = `
+                    <div class="swa-note" style="margin-top: 1rem;">
+                        <div class="swa-note-title">⚠️ Memory Bounded by Sliding Window</div>
+                        <p>Context length (${formatNumber(usedContextLength)}) exceeds sliding window (${formatNumber(results.slidingWindow)}). 
+                        KV cache memory is bounded at the sliding window size.</p>
+                    </div>
+                `;
+            } else {
+                swaMemoryNoteDiv.innerHTML = '';
+            }
+            
+            resultsDiv.classList.add('visible');
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('visible');
+        }
+
+        function hideError() {
+            document.getElementById('error-message').classList.remove('visible');
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('visible', show);
+        }
+
+        async function handleCalculate() {
+            const modelPath = document.getElementById('model-path').value.trim();
+            const tpSize = parseInt(document.getElementById('tp-size').value) || 1;
+            const contextLengthInput = document.getElementById('context-length').value;
+            const contextLength = contextLengthInput ? parseInt(contextLengthInput) : null;
+            
+            if (!modelPath) {
+                showError('Please enter a Hugging Face model path');
+                return;
+            }
+            
+            hideError();
+            document.getElementById('results').classList.remove('visible');
+            showLoading(true);
+            document.getElementById('calculate-btn').disabled = true;
+            
+            try {
+                const config = await fetchModelConfig(modelPath);
+                const results = calculateKVCache(config, tpSize);
+                displayResults(results, contextLength);
+            } catch (error) {
+                showError(`Error: ${error.message}. Make sure the model path is correct and the config.json is publicly accessible.`);
+            } finally {
+                showLoading(false);
+                document.getElementById('calculate-btn').disabled = false;
+            }
+        }
+
+        // Event listeners
+        document.getElementById('calculate-btn').addEventListener('click', handleCalculate);
+        document.getElementById('model-path').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleCalculate();
+        });
+        
+        // Example chips
+        document.querySelectorAll('.example-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.getElementById('model-path').value = chip.dataset.model;
+                handleCalculate();
+            });
+        });
+
+        // Export for testing
+        window.kvCacheCalc = { calculateKVCache, isMLA, getSlidingWindow, MLA_ARCHITECTURES, formatBytes, formatNumber };
+    </script>
+</body>
+</html>

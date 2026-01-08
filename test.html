@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KV Cache Calculator - Tests</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #6366f1; }
+        h2 { color: #a855f7; margin-top: 2rem; }
+        .test-case {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-left: 4px solid #475569;
+        }
+        .test-case.pass { border-left-color: #22c55e; }
+        .test-case.fail { border-left-color: #ef4444; }
+        .test-name { font-weight: bold; margin-bottom: 0.5rem; }
+        .test-details { font-family: monospace; font-size: 0.875rem; color: #94a3b8; }
+        .pass-badge { color: #22c55e; }
+        .fail-badge { color: #ef4444; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 500; }
+        .summary {
+            background: #0f3460;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 2rem;
+        }
+        .summary.all-pass { background: #14532d; }
+        .summary.has-fail { background: #7f1d1d; }
+    </style>
+</head>
+<body>
+    <h1>KV Cache Calculator - Test Suite</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script>
+        // Include the calculator functions (copy from index.html)
+        const MLA_ARCHITECTURES = [
+            'DeepseekV2ForCausalLM',
+            'DeepseekV32ForCausalLM', 
+            'DeepseekV3ForCausalLM',
+            'DeepseekV3ForCausalLMNextN',
+            'DeepseekVL2ForCausalLM',
+            'LongcatFlashForCausalLM',
+            'LongcatFlashForCausalLMNextN',
+            'DotsVLMForCausalLM',
+            'MistralLarge3ForCausalLM',
+            'PixtralForConditionalGeneration',
+            'MistralLarge3ForCausalLMEagle',
+            'MiniCPM3ForCausalLM',
+            'KimiVLForConditionalGeneration',
+            'KimiLinearForCausalLM',
+        ];
+
+        const BYTES_PER_DTYPE = { 'bf16': 2, 'fp16': 2, 'fp8': 1, 'int8': 1, 'fp32': 4 };
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function isMLA(architectures) {
+            if (!architectures) return false;
+            return architectures.some(arch => MLA_ARCHITECTURES.includes(arch));
+        }
+
+        function getSlidingWindow(config) {
+            let sw = config.sliding_window;
+            if (config.text_config) sw = sw || config.text_config.sliding_window;
+            if (Array.isArray(sw)) sw = sw.find(v => v !== null && v !== undefined);
+            return sw || null;
+        }
+
+        function getTextConfig(config) {
+            if (config.text_config) return { ...config, ...config.text_config };
+            return config;
+        }
+
+        function calculateKVCache(config, tpSize = 1) {
+            const textConfig = getTextConfig(config);
+            const architectures = config.architectures || [];
+            const useMLA = isMLA(architectures);
+            const slidingWindow = getSlidingWindow(config);
+            
+            const numLayers = textConfig.num_hidden_layers || textConfig.n_layer || 32;
+            const numKVHeads = textConfig.num_key_value_heads || textConfig.num_attention_heads || 32;
+            const defaultHeadDim = textConfig.hidden_size ? Math.floor(textConfig.hidden_size / (textConfig.num_attention_heads || 32)) : 128;
+            const headDim = textConfig.head_dim || defaultHeadDim;
+            
+            let kvBytesPerTokenBf16, kvBytesPerTokenFp8;
+            
+            if (useMLA) {
+                const kvLoraRank = textConfig.kv_lora_rank || 512;
+                const qkRopeHeadDim = textConfig.qk_rope_head_dim || 64;
+                const latentDim = kvLoraRank + qkRopeHeadDim;
+                
+                kvBytesPerTokenBf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
+                kvBytesPerTokenFp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
+            } else {
+                const kvHeadsPerTP = Math.max(1, Math.floor(numKVHeads / tpSize));
+                kvBytesPerTokenBf16 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
+                kvBytesPerTokenFp8 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
+            }
+            
+            return { bf16: kvBytesPerTokenBf16, fp8: kvBytesPerTokenFp8, useMLA, slidingWindow };
+        }
+
+        // Test configurations (simulating real model configs)
+        const TEST_CASES = [
+            {
+                name: "DeepSeek-V3 (MLA)",
+                config: {
+                    architectures: ["DeepseekV3ForCausalLM"],
+                    num_hidden_layers: 61,
+                    kv_lora_rank: 512,
+                    qk_rope_head_dim: 64,
+                    num_attention_heads: 128,
+                    hidden_size: 7168
+                },
+                expected: {
+                    bf16: 61 * (512 + 64) * 2,  // 70,272
+                    fp8: 61 * (512 + 64) * 1,   // 35,136
+                    useMLA: true,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "DeepSeek-R1 (MLA, same as V3)",
+                config: {
+                    architectures: ["DeepseekV3ForCausalLM"],
+                    num_hidden_layers: 61,
+                    kv_lora_rank: 512,
+                    qk_rope_head_dim: 64,
+                    num_attention_heads: 128,
+                    hidden_size: 7168
+                },
+                expected: {
+                    bf16: 70272,
+                    fp8: 35136,
+                    useMLA: true,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "DeepSeek-V2-Lite (MLA)",
+                config: {
+                    architectures: ["DeepseekV2ForCausalLM"],
+                    num_hidden_layers: 27,
+                    kv_lora_rank: 512,
+                    qk_rope_head_dim: 64,
+                    num_attention_heads: 16,
+                    hidden_size: 2048
+                },
+                expected: {
+                    bf16: 27 * (512 + 64) * 2,  // 31,104
+                    fp8: 27 * (512 + 64) * 1,   // 15,552
+                    useMLA: true,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "Kimi K2 (MLA)",
+                config: {
+                    architectures: ["KimiLinearForCausalLM"],
+                    num_hidden_layers: 61,
+                    kv_lora_rank: 512,
+                    qk_rope_head_dim: 64,
+                    qk_nope_head_dim: 128,
+                    v_head_dim: 128,
+                    num_attention_heads: 64,
+                    hidden_size: 6144
+                },
+                expected: {
+                    bf16: 61 * (512 + 64) * 2,  // 70,272
+                    fp8: 61 * (512 + 64) * 1,   // 35,136
+                    useMLA: true,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "Llama 3.1 8B (MHA, GQA)",
+                config: {
+                    architectures: ["LlamaForCausalLM"],
+                    num_hidden_layers: 32,
+                    num_attention_heads: 32,
+                    num_key_value_heads: 8,
+                    head_dim: 128,
+                    hidden_size: 4096
+                },
+                expected: {
+                    bf16: 2 * 32 * 8 * 128 * 2,  // 131,072
+                    fp8: 2 * 32 * 8 * 128 * 1,   // 65,536
+                    useMLA: false,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "Llama 3.1 70B (MHA, GQA)",
+                config: {
+                    architectures: ["LlamaForCausalLM"],
+                    num_hidden_layers: 80,
+                    num_attention_heads: 64,
+                    num_key_value_heads: 8,
+                    head_dim: 128,
+                    hidden_size: 8192
+                },
+                expected: {
+                    bf16: 2 * 80 * 8 * 128 * 2,  // 327,680
+                    fp8: 2 * 80 * 8 * 128 * 1,   // 163,840
+                    useMLA: false,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "Qwen2.5 72B (MHA, GQA)",
+                config: {
+                    architectures: ["Qwen2ForCausalLM"],
+                    num_hidden_layers: 80,
+                    num_attention_heads: 64,
+                    num_key_value_heads: 8,
+                    head_dim: 128,
+                    hidden_size: 8192
+                },
+                expected: {
+                    bf16: 2 * 80 * 8 * 128 * 2,  // 327,680
+                    fp8: 2 * 80 * 8 * 128 * 1,   // 163,840
+                    useMLA: false,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "Mistral 7B (MHA, Sliding Window)",
+                config: {
+                    architectures: ["MistralForCausalLM"],
+                    num_hidden_layers: 32,
+                    num_attention_heads: 32,
+                    num_key_value_heads: 8,
+                    head_dim: 128,
+                    hidden_size: 4096,
+                    sliding_window: 4096
+                },
+                expected: {
+                    bf16: 2 * 32 * 8 * 128 * 2,  // 131,072
+                    fp8: 2 * 32 * 8 * 128 * 1,   // 65,536
+                    useMLA: false,
+                    slidingWindow: 4096
+                }
+            },
+            {
+                name: "Mixtral 8x7B (MHA, Sliding Window)",
+                config: {
+                    architectures: ["MixtralForCausalLM"],
+                    num_hidden_layers: 32,
+                    num_attention_heads: 32,
+                    num_key_value_heads: 8,
+                    head_dim: 128,
+                    hidden_size: 4096,
+                    sliding_window: 4096
+                },
+                expected: {
+                    bf16: 2 * 32 * 8 * 128 * 2,  // 131,072
+                    fp8: 2 * 32 * 8 * 128 * 1,   // 65,536
+                    useMLA: false,
+                    slidingWindow: 4096
+                }
+            },
+            {
+                name: "Gemma 2 9B (MHA, Sliding Window)",
+                config: {
+                    architectures: ["Gemma2ForCausalLM"],
+                    num_hidden_layers: 42,
+                    num_attention_heads: 16,
+                    num_key_value_heads: 8,
+                    head_dim: 256,
+                    hidden_size: 3584,
+                    sliding_window: 4096
+                },
+                expected: {
+                    bf16: 2 * 42 * 8 * 256 * 2,  // 344,064
+                    fp8: 2 * 42 * 8 * 256 * 1,   // 172,032
+                    useMLA: false,
+                    slidingWindow: 4096
+                }
+            },
+            {
+                name: "GLM-4 9B (MHA)",
+                config: {
+                    architectures: ["ChatGLMForCausalLM"],
+                    num_hidden_layers: 40,
+                    num_attention_heads: 32,
+                    num_key_value_heads: 2,
+                    head_dim: 128,
+                    hidden_size: 4096
+                },
+                expected: {
+                    bf16: 2 * 40 * 2 * 128 * 2,  // 40,960
+                    fp8: 2 * 40 * 2 * 128 * 1,   // 20,480
+                    useMLA: false,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "MiMo 7B (MHA, Qwen2-based)",
+                config: {
+                    architectures: ["MiMoForCausalLM"],
+                    num_hidden_layers: 28,
+                    num_attention_heads: 28,
+                    num_key_value_heads: 4,
+                    head_dim: 128,
+                    hidden_size: 3584
+                },
+                expected: {
+                    bf16: 2 * 28 * 4 * 128 * 2,  // 57,344
+                    fp8: 2 * 28 * 4 * 128 * 1,   // 28,672
+                    useMLA: false,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "Llama 3.1 70B with TP=8",
+                config: {
+                    architectures: ["LlamaForCausalLM"],
+                    num_hidden_layers: 80,
+                    num_attention_heads: 64,
+                    num_key_value_heads: 8,
+                    head_dim: 128,
+                    hidden_size: 8192
+                },
+                tpSize: 8,
+                expected: {
+                    bf16: 2 * 80 * 1 * 128 * 2,  // 40,960 (8 KV heads / 8 TP = 1 head per GPU)
+                    fp8: 2 * 80 * 1 * 128 * 1,   // 20,480
+                    useMLA: false,
+                    slidingWindow: null
+                }
+            },
+            {
+                name: "MiniCPM3 (MLA)",
+                config: {
+                    architectures: ["MiniCPM3ForCausalLM"],
+                    num_hidden_layers: 62,
+                    kv_lora_rank: 512,
+                    qk_rope_head_dim: 64,
+                    num_attention_heads: 40,
+                    hidden_size: 2560
+                },
+                expected: {
+                    bf16: 62 * (512 + 64) * 2,  // 71,424
+                    fp8: 62 * (512 + 64) * 1,   // 35,712
+                    useMLA: true,
+                    slidingWindow: null
+                }
+            }
+        ];
+
+        // Run tests
+        function runTests() {
+            const resultsDiv = document.getElementById('results');
+            const summaryDiv = document.getElementById('summary');
+            let passed = 0;
+            let failed = 0;
+            let html = '';
+
+            for (const testCase of TEST_CASES) {
+                const result = calculateKVCache(testCase.config, testCase.tpSize || 1);
+                const checks = [
+                    { name: 'BF16 bytes/token', actual: result.bf16, expected: testCase.expected.bf16 },
+                    { name: 'FP8 bytes/token', actual: result.fp8, expected: testCase.expected.fp8 },
+                    { name: 'Is MLA', actual: result.useMLA, expected: testCase.expected.useMLA },
+                    { name: 'Sliding Window', actual: result.slidingWindow, expected: testCase.expected.slidingWindow }
+                ];
+
+                const allPass = checks.every(c => c.actual === c.expected);
+                if (allPass) passed++; else failed++;
+
+                html += `
+                    <div class="test-case ${allPass ? 'pass' : 'fail'}">
+                        <div class="test-name">
+                            ${allPass ? '✅' : '❌'} ${testCase.name}
+                            ${testCase.tpSize ? `(TP=${testCase.tpSize})` : ''}
+                        </div>
+                        <table>
+                            <tr><th>Check</th><th>Expected</th><th>Actual</th><th>Status</th></tr>
+                            ${checks.map(c => `
+                                <tr>
+                                    <td>${c.name}</td>
+                                    <td>${c.expected === null ? 'null' : (typeof c.expected === 'number' ? c.expected.toLocaleString() : c.expected)}</td>
+                                    <td>${c.actual === null ? 'null' : (typeof c.actual === 'number' ? c.actual.toLocaleString() : c.actual)}</td>
+                                    <td>${c.actual === c.expected ? '<span class="pass-badge">✓</span>' : '<span class="fail-badge">✗</span>'}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                        <div class="test-details">
+                            BF16 total for 128K context: ${formatBytes(result.bf16 * 131072)}
+                            ${result.slidingWindow ? ` (bounded at ${formatBytes(result.bf16 * result.slidingWindow)})` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+            
+            const total = passed + failed;
+            summaryDiv.className = `summary ${failed === 0 ? 'all-pass' : 'has-fail'}`;
+            summaryDiv.innerHTML = `
+                <h2>Summary</h2>
+                <p><strong>${passed}/${total}</strong> tests passed</p>
+                ${failed > 0 ? `<p style="color: #ef4444;">${failed} test(s) failed</p>` : '<p style="color: #22c55e;">All tests passed! 🎉</p>'}
+            `;
+        }
+
+        // Run tests on load
+        runTests();
+    </script>
+</body>
+</html>
