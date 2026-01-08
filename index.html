@@ -325,6 +325,17 @@
     <script>
         // Pre-loaded model configurations
         const BUILTIN_MODELS = {
+            "GPT-OSS-120B": {
+                architectures: ["GptOssForCausalLM"],
+                num_hidden_layers: 80,
+                num_attention_heads: 64,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 8192,
+                max_position_embeddings: 131072,
+                sliding_window: 8192,  // Has sliding window attention
+                // Note: Config estimated based on model architecture, not publicly available
+            },
             "DeepSeek-V3": {
                 architectures: ["DeepseekV3ForCausalLM"],
                 num_hidden_layers: 61,

@@ -78,6 +78,17 @@ def get_kv_at_seq_len(result, seq_len, dtype='bf16'):
 
 # Real model configurations (fetched from HuggingFace)
 MODELS = {
+    "GPT-OSS-120B": {
+        "architectures": ["GptOssForCausalLM"],
+        "num_hidden_layers": 80,
+        "num_attention_heads": 64,
+        "num_key_value_heads": 8,
+        "head_dim": 128,
+        "hidden_size": 8192,
+        "max_position_embeddings": 131072,
+        "sliding_window": 8192,  # Has sliding window attention
+        # Note: Config estimated based on model architecture, not publicly available
+    },
     "DeepSeek-V3": {
         "architectures": ["DeepseekV3ForCausalLM"],
         "num_hidden_layers": 61,
@@ -194,6 +205,7 @@ MODELS = {
 
 # Expected values for verification
 EXPECTED = {
+    "GPT-OSS-120B": {"bf16": 2 * 80 * 8 * 128 * 2, "fp8": 2 * 80 * 8 * 128, "use_mla": False, "sliding_window": 8192},  # 327680, 163840
     "DeepSeek-V3": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},       # 70272, 35136
     "DeepSeek-R1": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},       # 70272, 35136
     "Kimi-K2": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},           # 70272, 35136
