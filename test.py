@@ -46,6 +46,14 @@ def calculate_kv_cache(config, tp_size=1):
     num_layers = config.get('num_hidden_layers', 32)
     use_mla = is_mla(config)
     sliding_window = get_sliding_window(config)
+    layer_types = config.get('layer_types')
+    
+    # Count full vs sliding attention layers for hybrid models
+    num_full_layers = num_layers
+    num_sliding_layers = 0
+    if layer_types and isinstance(layer_types, list):
+        num_full_layers = sum(1 for t in layer_types if t == 'full_attention')
+        num_sliding_layers = sum(1 for t in layer_types if t == 'sliding_attention')
 
     if use_mla:
         kv_lora_rank = config.get('kv_lora_rank', 512)
@@ -54,6 +62,8 @@ def calculate_kv_cache(config, tp_size=1):
 
         bf16 = num_layers * latent_dim * BYTES_PER_DTYPE['bf16']
         fp8 = num_layers * latent_dim * BYTES_PER_DTYPE['fp8']
+        kv_heads = 1
+        head_dim = latent_dim
     else:
         num_kv_heads = config.get('num_key_value_heads') or config.get('num_attention_heads', 32)
         hidden_size = config.get('hidden_size', 4096)
@@ -64,13 +74,35 @@ def calculate_kv_cache(config, tp_size=1):
 
         bf16 = 2 * num_layers * kv_heads_per_tp * head_dim * BYTES_PER_DTYPE['bf16']
         fp8 = 2 * num_layers * kv_heads_per_tp * head_dim * BYTES_PER_DTYPE['fp8']
+        kv_heads = kv_heads_per_tp
 
-    return {'bf16': bf16, 'fp8': fp8, 'use_mla': use_mla, 'sliding_window': sliding_window}
+    return {
+        'bf16': bf16, 'fp8': fp8, 'use_mla': use_mla, 'sliding_window': sliding_window,
+        'num_layers': num_layers, 'kv_heads': kv_heads, 'head_dim': head_dim,
+        'num_full_layers': num_full_layers, 'num_sliding_layers': num_sliding_layers,
+        'has_hybrid': layer_types is not None and num_sliding_layers > 0
+    }
 
 
 def get_kv_at_seq_len(result, seq_len, dtype='bf16'):
-    bytes_per_token = result['fp8'] if dtype == 'fp8' else result['bf16']
+    bytes_per_element = BYTES_PER_DTYPE['fp8'] if dtype == 'fp8' else BYTES_PER_DTYPE['bf16']
     sw = result['sliding_window']
+    
+    # For hybrid attention (some sliding, some full layers)
+    if result.get('has_hybrid') and result['num_sliding_layers'] > 0 and sw:
+        bytes_per_layer_per_token = 2 * result['kv_heads'] * result['head_dim'] * bytes_per_element
+        
+        if seq_len <= sw:
+            # All layers contribute fully
+            return result['num_layers'] * bytes_per_layer_per_token * seq_len
+        else:
+            # Sliding layers bounded, full layers grow
+            sliding_contrib = result['num_sliding_layers'] * bytes_per_layer_per_token * sw
+            full_contrib = result['num_full_layers'] * bytes_per_layer_per_token * seq_len
+            return sliding_contrib + full_contrib
+    
+    # Standard sliding window (all layers bounded)
+    bytes_per_token = result['fp8'] if dtype == 'fp8' else result['bf16']
     if sw and seq_len > sw:
         return bytes_per_token * sw
     return bytes_per_token * seq_len
@@ -79,15 +111,17 @@ def get_kv_at_seq_len(result, seq_len, dtype='bf16'):
 # Real model configurations (fetched from HuggingFace)
 MODELS = {
     "GPT-OSS-120B": {
+        # From unsloth/gpt-oss-120b
         "architectures": ["GptOssForCausalLM"],
-        "num_hidden_layers": 80,
+        "num_hidden_layers": 36,
         "num_attention_heads": 64,
         "num_key_value_heads": 8,
-        "head_dim": 128,
-        "hidden_size": 8192,
+        "head_dim": 64,
+        "hidden_size": 2880,
         "max_position_embeddings": 131072,
-        "sliding_window": 8192,  # Has sliding window attention
-        # Note: Config estimated based on model architecture, not publicly available
+        "sliding_window": 128,
+        # Alternating sliding/full attention: 18 sliding + 18 full layers
+        "layer_types": ["sliding_attention","full_attention"] * 18,
     },
     "DeepSeek-V3": {
         "architectures": ["DeepseekV3ForCausalLM"],
@@ -205,7 +239,7 @@ MODELS = {
 
 # Expected values for verification
 EXPECTED = {
-    "GPT-OSS-120B": {"bf16": 2 * 80 * 8 * 128 * 2, "fp8": 2 * 80 * 8 * 128, "use_mla": False, "sliding_window": 8192},  # 327680, 163840
+    "GPT-OSS-120B": {"bf16": 2 * 36 * 8 * 64 * 2, "fp8": 2 * 36 * 8 * 64, "use_mla": False, "sliding_window": 128},  # 36864, 18432 (hybrid: 18 full + 18 sliding)
     "DeepSeek-V3": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},       # 70272, 35136
     "DeepSeek-R1": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},       # 70272, 35136
     "Kimi-K2": {"bf16": 61 * 576 * 2, "fp8": 61 * 576, "use_mla": True},           # 70272, 35136
@@ -244,16 +278,29 @@ def main():
     ctx_len = 131072  # 128K
 
     for name, config, result in results:
-        type_str = "MLA" if result['use_mla'] else ("SWA" if result['sliding_window'] else "MHA")
+        if result['use_mla']:
+            type_str = "MLA"
+        elif result.get('has_hybrid'):
+            type_str = "Hybrid"
+        elif result['sliding_window']:
+            type_str = "SWA"
+        else:
+            type_str = "MHA"
 
-        # Calculate 128K memory (bounded for SWA)
+        # Calculate 128K memory (bounded/reduced for SWA/hybrid)
         bf16_128k = get_kv_at_seq_len(result, ctx_len, 'bf16')
         fp8_128k = get_kv_at_seq_len(result, ctx_len, 'fp8')
-        bounded = result['sliding_window'] and ctx_len > result['sliding_window']
+        has_bounding = result['sliding_window'] and ctx_len > result['sliding_window']
+        
+        # Layer info
+        if result.get('has_hybrid'):
+            layer_info = f"{result['num_full_layers']}F+{result['num_sliding_layers']}S"
+        else:
+            layer_info = str(config.get('num_hidden_layers', 32))
 
-        print(f"{name:<20} {type_str:<6} {config.get('num_hidden_layers', 32):<7} "
+        print(f"{name:<20} {type_str:<6} {layer_info:<7} "
               f"{result['bf16']:>12,} {result['fp8']:>12,} "
-              f"{format_bytes(bf16_128k):>12}{'*' if bounded else ' '} {format_bytes(fp8_128k):>12}{'*' if bounded else ' '}")
+              f"{format_bytes(bf16_128k):>12}{'*' if has_bounding else ' '} {format_bytes(fp8_128k):>12}{'*' if has_bounding else ' '}")
 
         # Verify against expected if available
         if name in EXPECTED:
