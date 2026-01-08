@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KV Cache Calculator</title>
+    <title>KV Cache Calculator - Model Comparison</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -19,11 +20,7 @@
             --error: #ef4444;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -33,16 +30,9 @@
             line-height: 1.6;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
 
-        header {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
+        header { text-align: center; margin-bottom: 2rem; }
 
         h1 {
             font-size: 2.5rem;
@@ -53,46 +43,93 @@
             margin-bottom: 0.5rem;
         }
 
-        .subtitle {
-            color: var(--text-muted);
-            font-size: 1.1rem;
-        }
+        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
 
         .card {
             background: var(--bg-card);
             border-radius: 16px;
-            padding: 2rem;
+            padding: 1.5rem;
             margin-bottom: 1.5rem;
             border: 1px solid var(--border);
         }
 
-        .input-group {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
+        h2 { margin-bottom: 1rem; font-size: 1.25rem; }
+        h3 { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
         }
 
-        .input-wrapper {
-            flex: 1;
+        @media (max-width: 1000px) {
+            .charts-grid { grid-template-columns: 1fr; }
         }
+
+        .chart-container {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 1rem;
+            height: 400px;
+        }
+
+        .model-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .model-table th, .model-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .model-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+        }
+
+        .model-table tr:hover { background: rgba(99, 102, 241, 0.1); }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-mla { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        .badge-mha { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .badge-swa { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+        .add-model-section {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .input-wrapper { flex: 1; min-width: 250px; }
 
         label {
             display: block;
             margin-bottom: 0.5rem;
             color: var(--text-muted);
             font-size: 0.875rem;
-            font-weight: 500;
         }
 
-        input[type="text"], input[type="number"] {
+        input {
             width: 100%;
-            padding: 0.875rem 1rem;
+            padding: 0.75rem 1rem;
             background: var(--bg-input);
             border: 1px solid var(--border);
             border-radius: 8px;
             color: var(--text);
             font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         input:focus {
@@ -101,269 +138,86 @@
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
         }
 
-        input::placeholder {
-            color: var(--text-muted);
-        }
-
         button {
-            padding: 0.875rem 2rem;
+            padding: 0.75rem 1.5rem;
             background: var(--primary);
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 0.875rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
+            transition: background 0.2s;
+            white-space: nowrap;
         }
 
-        button:hover {
-            background: var(--primary-dark);
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .btn-row {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .results {
-            display: none;
-        }
-
-        .results.visible {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .model-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .info-item {
-            background: var(--bg);
-            padding: 1rem;
-            border-radius: 8px;
-        }
-
-        .info-label {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.25rem;
-        }
-
-        .info-value {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-
-        .kv-results {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .kv-card {
-            background: linear-gradient(135deg, var(--bg) 0%, var(--bg-card) 100%);
-            border-radius: 12px;
-            padding: 1.5rem;
-            border: 1px solid var(--border);
-        }
-
-        .kv-card h3 {
-            font-size: 1rem;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .dtype-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .dtype-bf16 {
-            background: rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
-        }
-
-        .dtype-fp8 {
-            background: rgba(34, 197, 94, 0.2);
-            color: #4ade80;
-        }
-
-        .kv-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        .kv-unit {
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
-
-        .kv-detail {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-        }
-
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-        }
-
-        .detail-label {
-            color: var(--text-muted);
-        }
-
-        .attention-type {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(99, 102, 241, 0.2);
-            border-radius: 20px;
-            font-size: 0.875rem;
-            margin-bottom: 0.5rem;
-            margin-right: 0.5rem;
-        }
-
-        .attention-type.mla {
-            background: rgba(168, 85, 247, 0.2);
-            color: #c084fc;
-        }
-
-        .attention-type.mha {
-            background: rgba(34, 197, 94, 0.2);
-            color: #4ade80;
-        }
-
-        .attention-type.swa {
-            background: rgba(245, 158, 11, 0.2);
-            color: #fbbf24;
-        }
+        button:hover { background: var(--primary-dark); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .error-message {
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid var(--error);
             color: var(--error);
-            padding: 1rem;
+            padding: 0.75rem;
             border-radius: 8px;
             margin-top: 1rem;
+            font-size: 0.875rem;
             display: none;
         }
 
-        .error-message.visible {
-            display: block;
-        }
+        .error-message.visible { display: block; }
 
-        .loading {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 2rem;
-            color: var(--text-muted);
-        }
-
-        .loading.visible {
+        .controls {
             display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
         }
 
-        .spinner {
-            width: 24px;
-            height: 24px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .control-group label {
+            margin-bottom: 0;
+            white-space: nowrap;
         }
 
-        .formula-section {
-            margin-top: 1.5rem;
-            padding: 1rem;
-            background: var(--bg);
-            border-radius: 8px;
-            font-family: 'Monaco', 'Menlo', monospace;
+        .control-group input {
+            width: 100px;
+        }
+
+        select {
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
             font-size: 0.875rem;
-            overflow-x: auto;
-            white-space: pre-wrap;
         }
 
-        .formula-title {
+        .legend-note {
+            font-size: 0.75rem;
             color: var(--text-muted);
-            margin-bottom: 0.5rem;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        .context-input {
             margin-top: 1rem;
         }
 
-        .total-memory {
-            margin-top: 1.5rem;
-            padding: 1.5rem;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
-            border-radius: 12px;
-            border: 1px solid var(--primary);
+        .table-scroll {
+            max-height: 400px;
+            overflow-y: auto;
         }
 
-        .total-memory h3 {
-            color: var(--text-muted);
-            font-size: 0.875rem;
-            margin-bottom: 1rem;
-        }
-
-        .memory-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-
-        .memory-item {
-            text-align: center;
-        }
-
-        .memory-value {
-            font-size: 1.75rem;
-            font-weight: 700;
-        }
-
-        .memory-label {
-            color: var(--text-muted);
+        .remove-btn {
+            background: transparent;
+            color: var(--error);
+            padding: 0.25rem 0.5rem;
             font-size: 0.75rem;
         }
+
+        .remove-btn:hover { background: rgba(239, 68, 68, 0.2); }
 
         footer {
             text-align: center;
@@ -372,237 +226,236 @@
             font-size: 0.875rem;
         }
 
-        footer a {
-            color: var(--primary);
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
-
-        .tp-input {
-            max-width: 120px;
-        }
-
-        .examples {
-            margin-top: 1rem;
-        }
-
-        .examples-title {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .example-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .example-chip {
-            padding: 0.375rem 0.75rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .example-chip:hover {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-
-        .example-chip.mla {
-            border-color: rgba(168, 85, 247, 0.5);
-        }
-
-        .example-chip.mha {
-            border-color: rgba(34, 197, 94, 0.5);
-        }
-
-        .example-chip.swa {
-            border-color: rgba(245, 158, 11, 0.5);
-        }
-
-        .swa-note {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-            font-size: 0.875rem;
-        }
-
-        .swa-note-title {
-            color: #fbbf24;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .swa-comparison {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .swa-column {
-            background: var(--bg);
-            padding: 1rem;
-            border-radius: 8px;
-        }
-
-        .swa-column-title {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
+        footer a { color: var(--primary); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>KV Cache Calculator</h1>
-            <p class="subtitle">Calculate KV cache memory requirements for LLM models</p>
+            <p class="subtitle">Compare KV cache memory requirements across LLM models</p>
         </header>
 
         <div class="card">
-            <div class="input-group">
+            <h2>Add Custom Model</h2>
+            <div class="add-model-section">
                 <div class="input-wrapper">
                     <label for="model-path">Hugging Face Model Path</label>
-                    <input type="text" id="model-path" placeholder="e.g., deepseek-ai/DeepSeek-V3" autocomplete="off">
+                    <input type="text" id="model-path" placeholder="e.g., organization/model-name">
                 </div>
-                <div class="input-wrapper tp-input">
-                    <label for="tp-size">TP Size</label>
+                <div class="input-wrapper" style="max-width: 150px;">
+                    <label for="display-name">Display Name (optional)</label>
+                    <input type="text" id="display-name" placeholder="Short name">
+                </div>
+                <button id="add-btn">Add Model</button>
+            </div>
+            <div class="error-message" id="error-message"></div>
+        </div>
+
+        <div class="card">
+            <h2>Controls</h2>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="tp-size">Tensor Parallel Size:</label>
                     <input type="number" id="tp-size" value="1" min="1" max="64">
                 </div>
-            </div>
-            
-            <div class="examples">
-                <div class="examples-title">🔗 MLA Models (click to try)</div>
-                <div class="example-chips">
-                    <span class="example-chip mla" data-model="deepseek-ai/DeepSeek-V3">DeepSeek-V3</span>
-                    <span class="example-chip mla" data-model="deepseek-ai/DeepSeek-R1">DeepSeek-R1</span>
-                    <span class="example-chip mla" data-model="deepseek-ai/DeepSeek-V2-Lite">DeepSeek-V2-Lite</span>
-                    <span class="example-chip mla" data-model="moonshotai/Kimi-K2-Instruct">Kimi K2</span>
+                <div class="control-group">
+                    <label for="dtype">Data Type:</label>
+                    <select id="dtype">
+                        <option value="bf16">BF16 (2 bytes)</option>
+                        <option value="fp8">FP8 (1 byte)</option>
+                    </select>
                 </div>
-            </div>
-
-            <div class="examples" style="margin-top: 0.75rem;">
-                <div class="examples-title">🧠 MHA Models</div>
-                <div class="example-chips">
-                    <span class="example-chip mha" data-model="THUDM/glm-4-9b-chat-hf">GLM-4</span>
-                    <span class="example-chip mha" data-model="MiniMaxAI/MiniMax-M1-40k">MiniMax-M1</span>
-                    <span class="example-chip mha" data-model="Xiaomi/MiMo-7B-RL">MiMo-7B</span>
-                    <span class="example-chip mha" data-model="meta-llama/Llama-3.1-70B-Instruct">Llama 3.1 70B</span>
-                    <span class="example-chip mha" data-model="meta-llama/Llama-3.1-8B-Instruct">Llama 3.1 8B</span>
-                    <span class="example-chip mha" data-model="Qwen/Qwen2.5-72B-Instruct">Qwen2.5 72B</span>
-                </div>
-            </div>
-
-            <div class="examples" style="margin-top: 0.75rem;">
-                <div class="examples-title">🪟 Sliding Window Attention Models</div>
-                <div class="example-chips">
-                    <span class="example-chip swa" data-model="mistralai/Mistral-7B-Instruct-v0.3">Mistral 7B</span>
-                    <span class="example-chip swa" data-model="mistralai/Mixtral-8x7B-Instruct-v0.1">Mixtral 8x7B</span>
-                    <span class="example-chip swa" data-model="google/gemma-2-9b-it">Gemma 2 9B</span>
-                    <span class="example-chip swa" data-model="google/gemma-2-27b-it">Gemma 2 27B</span>
-                </div>
-            </div>
-
-            <div class="context-input">
-                <label for="context-length">Context Length (tokens) - optional, uses model default if empty</label>
-                <input type="number" id="context-length" placeholder="e.g., 131072" min="1">
-            </div>
-
-            <div class="btn-row">
-                <button id="calculate-btn">Calculate KV Cache</button>
-            </div>
-
-            <div class="error-message" id="error-message"></div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <span>Fetching model config...</span>
+                <button id="refresh-btn">Refresh Charts</button>
             </div>
         </div>
 
-        <div class="results" id="results">
+        <div class="charts-grid">
             <div class="card">
-                <h2 style="margin-bottom: 1rem;">Model Configuration</h2>
-                
-                <div id="attention-type-badge"></div>
-                
-                <div class="model-info" id="model-info"></div>
-
-                <div class="formula-section">
-                    <div class="formula-title">Formula Used:</div>
-                    <div id="formula"></div>
+                <h2>KV Cache Bytes per Token</h2>
+                <h3>Lower is better - MLA models have compressed KV cache</h3>
+                <div class="chart-container">
+                    <canvas id="barChart"></canvas>
                 </div>
             </div>
-
             <div class="card">
-                <h2 style="margin-bottom: 1.5rem;">KV Cache per Token</h2>
-                <div class="kv-results" id="kv-results"></div>
-                <div id="swa-note"></div>
+                <h2>KV Cache Size vs Sequence Length</h2>
+                <h3>Log-log scale - SWA models plateau at window size</h3>
+                <div class="chart-container">
+                    <canvas id="lineChart"></canvas>
+                </div>
             </div>
+        </div>
 
-            <div class="card total-memory">
-                <h3>Total KV Cache Memory for Context Length: <span id="context-display"></span> tokens</h3>
-                <div class="memory-grid" id="memory-grid"></div>
-                <div id="swa-memory-note"></div>
+        <div class="card">
+            <h2>Model Details</h2>
+            <div class="table-scroll">
+                <table class="model-table" id="model-table">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Type</th>
+                            <th>Layers</th>
+                            <th>KV Heads</th>
+                            <th>Head Dim</th>
+                            <th>BF16 B/tok</th>
+                            <th>FP8 B/tok</th>
+                            <th>128K BF16</th>
+                            <th>128K FP8</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="model-tbody"></tbody>
+                </table>
+            </div>
+            <div class="legend-note">
+                <strong>Type:</strong> 
+                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention (compressed KV) |
+                <span class="badge badge-mha">MHA</span> Multi-Head Attention |
+                <span class="badge badge-swa">SWA</span> Sliding Window (bounded memory)
             </div>
         </div>
 
         <footer>
-            <p>
-                Calculates KV cache memory requirements for transformer models.<br>
-                Supports MHA, MLA, and Sliding Window Attention architectures.<br>
-                <a href="https://github.com" target="_blank">View on GitHub</a>
-            </p>
+            <p>KV Cache Calculator - Compare memory requirements across transformer models</p>
         </footer>
     </div>
 
     <script>
-        // MLA architectures that use compressed KV cache
-        const MLA_ARCHITECTURES = [
-            // DeepSeek family
-            'DeepseekV2ForCausalLM',
-            'DeepseekV32ForCausalLM', 
-            'DeepseekV3ForCausalLM',
-            'DeepseekV3ForCausalLMNextN',
-            'DeepseekVL2ForCausalLM',
-            // Longcat
-            'LongcatFlashForCausalLM',
-            'LongcatFlashForCausalLMNextN',
-            // Dots
-            'DotsVLMForCausalLM',
-            // Mistral Large 3 (uses MLA)
-            'MistralLarge3ForCausalLM',
-            'PixtralForConditionalGeneration',
-            'MistralLarge3ForCausalLMEagle',
-            // MiniCPM3
-            'MiniCPM3ForCausalLM',
-            // Kimi
-            'KimiVLForConditionalGeneration',
-            'KimiLinearForCausalLM',  // Kimi K2
-        ];
-
-        const BYTES_PER_DTYPE = {
-            'bf16': 2,
-            'fp16': 2,
-            'fp8': 1,
-            'int8': 1,
-            'fp32': 4
+        // Pre-loaded model configurations
+        const BUILTIN_MODELS = {
+            "DeepSeek-V3": {
+                architectures: ["DeepseekV3ForCausalLM"],
+                num_hidden_layers: 61,
+                kv_lora_rank: 512,
+                qk_rope_head_dim: 64,
+                num_attention_heads: 128,
+                hidden_size: 7168,
+                max_position_embeddings: 163840
+            },
+            "DeepSeek-R1": {
+                architectures: ["DeepseekV3ForCausalLM"],
+                num_hidden_layers: 61,
+                kv_lora_rank: 512,
+                qk_rope_head_dim: 64,
+                num_attention_heads: 128,
+                hidden_size: 7168,
+                max_position_embeddings: 163840
+            },
+            "Kimi-K2": {
+                architectures: ["DeepseekV3ForCausalLM"],
+                model_type: "kimi_k2",
+                num_hidden_layers: 61,
+                kv_lora_rank: 512,
+                qk_rope_head_dim: 64,
+                num_attention_heads: 64,
+                hidden_size: 7168,
+                max_position_embeddings: 131072
+            },
+            "GLM-4.5": {
+                architectures: ["Glm4MoeForCausalLM"],
+                num_hidden_layers: 92,
+                num_attention_heads: 96,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 5120,
+                max_position_embeddings: 131072
+            },
+            "MiniMax-M2.1": {
+                architectures: ["MiniMaxM2ForCausalLM"],
+                num_hidden_layers: 62,
+                num_attention_heads: 48,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 3072,
+                max_position_embeddings: 196608
+            },
+            "Qwen3-235B-A22B": {
+                architectures: ["Qwen3MoeForCausalLM"],
+                num_hidden_layers: 94,
+                num_attention_heads: 64,
+                num_key_value_heads: 4,
+                head_dim: 128,
+                hidden_size: 4096,
+                max_position_embeddings: 40960
+            },
+            "Qwen2.5-72B": {
+                architectures: ["Qwen2ForCausalLM"],
+                num_hidden_layers: 80,
+                num_attention_heads: 64,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 8192,
+                max_position_embeddings: 32768,
+                sliding_window: 131072,
+                use_sliding_window: false
+            },
+            "Qwen2.5-7B": {
+                architectures: ["Qwen2ForCausalLM"],
+                num_hidden_layers: 28,
+                num_attention_heads: 28,
+                num_key_value_heads: 4,
+                head_dim: 128,
+                hidden_size: 3584,
+                max_position_embeddings: 32768
+            },
+            "Mixtral-8x7B": {
+                architectures: ["MixtralForCausalLM"],
+                num_hidden_layers: 32,
+                num_attention_heads: 32,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 4096,
+                max_position_embeddings: 32768,
+                sliding_window: null
+            },
+            "Mistral-7B": {
+                architectures: ["MistralForCausalLM"],
+                num_hidden_layers: 32,
+                num_attention_heads: 32,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 4096,
+                max_position_embeddings: 32768,
+                sliding_window: 4096
+            },
+            "Llama-3.1-70B": {
+                architectures: ["LlamaForCausalLM"],
+                num_hidden_layers: 80,
+                num_attention_heads: 64,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 8192,
+                max_position_embeddings: 131072
+            },
+            "Llama-3.1-8B": {
+                architectures: ["LlamaForCausalLM"],
+                num_hidden_layers: 32,
+                num_attention_heads: 32,
+                num_key_value_heads: 8,
+                head_dim: 128,
+                hidden_size: 4096,
+                max_position_embeddings: 131072
+            }
         };
 
+        // MLA architectures
+        const MLA_ARCHITECTURES = [
+            'DeepseekV2ForCausalLM', 'DeepseekV32ForCausalLM', 'DeepseekV3ForCausalLM',
+            'DeepseekV3ForCausalLMNextN', 'DeepseekVL2ForCausalLM', 'LongcatFlashForCausalLM',
+            'MistralLarge3ForCausalLM', 'PixtralForConditionalGeneration', 'MiniCPM3ForCausalLM',
+            'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM'
+        ];
+
+        const BYTES_PER_DTYPE = { bf16: 2, fp16: 2, fp8: 1 };
+
+        // Model state
+        let models = {};
+        let customModels = {};
+        let barChart, lineChart;
+
+        // Utility functions
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
@@ -611,372 +464,321 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        function formatNumber(num) {
-            return num.toLocaleString();
-        }
-
-        function isMLA(architectures) {
-            if (!architectures) return false;
-            return architectures.some(arch => MLA_ARCHITECTURES.includes(arch));
+        function isMLA(config) {
+            const archs = config.architectures || [];
+            // Check for kv_lora_rank as definitive MLA indicator
+            if (config.kv_lora_rank) return true;
+            return archs.some(a => MLA_ARCHITECTURES.includes(a));
         }
 
         function getSlidingWindow(config) {
-            // Check for sliding window in config
-            // Can be a number or an array (Mistral style)
             let sw = config.sliding_window;
-            if (sw === null || sw === undefined) {
-                // Check text_config for multimodal models
-                if (config.text_config) {
-                    sw = config.text_config.sliding_window;
-                }
-            }
-            
-            // Handle array format (Mistral uses this)
-            if (Array.isArray(sw)) {
-                // Find first non-null value
-                sw = sw.find(v => v !== null && v !== undefined);
-            }
-            
+            if (Array.isArray(sw)) sw = sw.find(v => v !== null);
+            // Don't use sliding window if use_sliding_window is explicitly false
+            if (config.use_sliding_window === false) return null;
             return sw || null;
         }
 
-        function getContextLength(config) {
-            // Try various config keys for context length
-            const keys = [
-                'max_position_embeddings',
-                'max_seq_len',
-                'max_sequence_length',
-                'n_positions',
-                'seq_length'
-            ];
-            
-            for (const key of keys) {
-                if (config[key]) return config[key];
-            }
-            
-            // Check text_config for multimodal models
-            if (config.text_config) {
-                for (const key of keys) {
-                    if (config.text_config[key]) return config.text_config[key];
-                }
-            }
-            
-            return 4096; // Default fallback
-        }
-
-        function getTextConfig(config) {
-            // For multimodal models, use text_config
-            if (config.text_config) {
-                return { ...config, ...config.text_config };
-            }
-            return config;
-        }
-
         function calculateKVCache(config, tpSize = 1) {
-            const textConfig = getTextConfig(config);
-            const architectures = config.architectures || [];
-            const useMLA = isMLA(architectures);
+            const numLayers = config.num_hidden_layers || 32;
+            const useMLA = isMLA(config);
             const slidingWindow = getSlidingWindow(config);
-            
-            const numLayers = textConfig.num_hidden_layers || textConfig.n_layer || 32;
-            const numKVHeads = textConfig.num_key_value_heads || textConfig.num_attention_heads || 32;
-            const defaultHeadDim = textConfig.hidden_size ? Math.floor(textConfig.hidden_size / (textConfig.num_attention_heads || 32)) : 128;
-            const headDim = textConfig.head_dim || defaultHeadDim;
-            
-            let kvBytesPerTokenBf16, kvBytesPerTokenFp8;
-            let formula, modelInfo;
-            
+
+            let bf16, fp8, kvHeads, headDim, latentDim;
+
             if (useMLA) {
-                // MLA uses compressed KV cache
-                const kvLoraRank = textConfig.kv_lora_rank || 512;
-                const qkRopeHeadDim = textConfig.qk_rope_head_dim || 64;
-                const latentDim = kvLoraRank + qkRopeHeadDim;
-                
-                kvBytesPerTokenBf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
-                kvBytesPerTokenFp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
-                
-                formula = `MLA KV Cache = num_layers × (kv_lora_rank + qk_rope_head_dim) × bytes_per_element
-= ${numLayers} × (${kvLoraRank} + ${qkRopeHeadDim}) × bytes
-= ${numLayers} × ${latentDim} × bytes
-
-BF16: ${numLayers} × ${latentDim} × 2 = ${formatNumber(kvBytesPerTokenBf16)} bytes/token
-FP8:  ${numLayers} × ${latentDim} × 1 = ${formatNumber(kvBytesPerTokenFp8)} bytes/token`;
-                
-                modelInfo = {
-                    'Architecture': architectures[0] || 'Unknown',
-                    'Attention Type': 'MLA (Multi-head Latent Attention)',
-                    'Num Layers': numLayers,
-                    'KV LoRA Rank': kvLoraRank,
-                    'QK Rope Head Dim': qkRopeHeadDim,
-                    'Latent Dim (KV size)': latentDim,
-                    'Num Attention Heads': textConfig.num_attention_heads || 'N/A',
-                    'Hidden Size': textConfig.hidden_size || 'N/A'
-                };
-                
-                if (textConfig.qk_nope_head_dim) {
-                    modelInfo['QK Nope Head Dim'] = textConfig.qk_nope_head_dim;
-                }
-                if (textConfig.v_head_dim) {
-                    modelInfo['V Head Dim'] = textConfig.v_head_dim;
-                }
+                const kvLoraRank = config.kv_lora_rank || 512;
+                const qkRopeHeadDim = config.qk_rope_head_dim || 64;
+                latentDim = kvLoraRank + qkRopeHeadDim;
+                bf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
+                fp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
+                kvHeads = 1; // MLA compresses to single latent
+                headDim = latentDim;
             } else {
-                // Standard MHA: 2 (K and V) × num_layers × num_kv_heads × head_dim × bytes
+                const numKVHeads = config.num_key_value_heads || config.num_attention_heads || 32;
+                const defaultHeadDim = config.hidden_size ? Math.floor(config.hidden_size / (config.num_attention_heads || 32)) : 128;
+                headDim = config.head_dim || defaultHeadDim;
                 const kvHeadsPerTP = Math.max(1, Math.floor(numKVHeads / tpSize));
-                
-                kvBytesPerTokenBf16 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
-                kvBytesPerTokenFp8 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
-                
-                formula = `MHA KV Cache (per GPU) = 2 × num_layers × num_kv_heads_per_tp × head_dim × bytes_per_element
-= 2 × ${numLayers} × ${kvHeadsPerTP} × ${headDim} × bytes
-
-BF16: 2 × ${numLayers} × ${kvHeadsPerTP} × ${headDim} × 2 = ${formatNumber(kvBytesPerTokenBf16)} bytes/token
-FP8:  2 × ${numLayers} × ${kvHeadsPerTP} × ${headDim} × 1 = ${formatNumber(kvBytesPerTokenFp8)} bytes/token`;
-                
-                if (tpSize > 1) {
-                    formula += `\n\n(num_kv_heads_per_tp = max(1, ${numKVHeads} / ${tpSize}) = ${kvHeadsPerTP})`;
-                }
-                
-                if (slidingWindow) {
-                    formula += `\n\n⚠️ SLIDING WINDOW ATTENTION (window_size = ${formatNumber(slidingWindow)})
-- For seq_len ≤ ${formatNumber(slidingWindow)}: KV cache grows linearly at above rate
-- For seq_len > ${formatNumber(slidingWindow)}: KV cache is BOUNDED at ${formatNumber(slidingWindow)} tokens
-  → Max BF16: ${formatBytes(kvBytesPerTokenBf16 * slidingWindow)}
-  → Max FP8:  ${formatBytes(kvBytesPerTokenFp8 * slidingWindow)}`;
-                }
-                
-                modelInfo = {
-                    'Architecture': architectures[0] || 'Unknown',
-                    'Attention Type': slidingWindow ? 'MHA + Sliding Window' : 'MHA (Multi-Head Attention)',
-                    'Num Layers': numLayers,
-                    'Num KV Heads (total)': numKVHeads,
-                    'Num KV Heads (per GPU)': kvHeadsPerTP,
-                    'Head Dim': headDim,
-                    'Num Attention Heads': textConfig.num_attention_heads || 'N/A',
-                    'Hidden Size': textConfig.hidden_size || 'N/A'
-                };
-                
-                if (slidingWindow) {
-                    modelInfo['Sliding Window Size'] = slidingWindow;
-                }
+                bf16 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
+                fp8 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
+                kvHeads = kvHeadsPerTP;
             }
-            
+
             return {
-                bf16: kvBytesPerTokenBf16,
-                fp8: kvBytesPerTokenFp8,
-                formula,
-                modelInfo,
-                useMLA,
-                slidingWindow,
-                contextLength: getContextLength(textConfig)
+                bf16, fp8, useMLA, slidingWindow,
+                numLayers, kvHeads, headDim,
+                maxCtx: config.max_position_embeddings || 32768
             };
         }
 
-        async function fetchModelConfig(modelPath) {
-            const configUrl = `https://huggingface.co/${modelPath}/raw/main/config.json`;
-            
-            const response = await fetch(configUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
+        function getKVCacheAtSeqLen(result, seqLen, dtype) {
+            const bytesPerToken = dtype === 'fp8' ? result.fp8 : result.bf16;
+            if (result.slidingWindow && seqLen > result.slidingWindow) {
+                return bytesPerToken * result.slidingWindow;
             }
-            
-            return await response.json();
+            return bytesPerToken * seqLen;
         }
 
-        function displayResults(results, contextLength) {
-            const resultsDiv = document.getElementById('results');
-            const modelInfoDiv = document.getElementById('model-info');
-            const kvResultsDiv = document.getElementById('kv-results');
-            const formulaDiv = document.getElementById('formula');
-            const attentionBadgeDiv = document.getElementById('attention-type-badge');
-            const contextDisplay = document.getElementById('context-display');
-            const memoryGrid = document.getElementById('memory-grid');
-            const swaNoteDiv = document.getElementById('swa-note');
-            const swaMemoryNoteDiv = document.getElementById('swa-memory-note');
-            
-            // Attention type badges
-            let badges = '';
-            if (results.useMLA) {
-                badges += `<span class="attention-type mla">🔗 MLA Architecture (Compressed KV Cache)</span>`;
-            } else {
-                badges += `<span class="attention-type mha">🧠 MHA Architecture</span>`;
-            }
-            if (results.slidingWindow) {
-                badges += `<span class="attention-type swa">🪟 Sliding Window (${formatNumber(results.slidingWindow)} tokens)</span>`;
-            }
-            attentionBadgeDiv.innerHTML = badges;
-            
-            // Model info
-            modelInfoDiv.innerHTML = Object.entries(results.modelInfo)
-                .map(([key, value]) => `
-                    <div class="info-item">
-                        <div class="info-label">${key}</div>
-                        <div class="info-value">${typeof value === 'number' ? formatNumber(value) : value}</div>
-                    </div>
-                `).join('');
-            
-            // Formula
-            formulaDiv.textContent = results.formula;
-            
-            // KV cache per token results
-            kvResultsDiv.innerHTML = `
-                <div class="kv-card">
-                    <h3><span class="dtype-badge dtype-bf16">BF16</span> KV Cache per Token</h3>
-                    <div class="kv-value">${formatNumber(results.bf16)}</div>
-                    <div class="kv-unit">bytes per token (per GPU)</div>
-                    <div class="kv-detail">
-                        <div class="detail-row">
-                            <span class="detail-label">Bytes per element:</span>
-                            <span>2</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="kv-card">
-                    <h3><span class="dtype-badge dtype-fp8">FP8</span> KV Cache per Token</h3>
-                    <div class="kv-value">${formatNumber(results.fp8)}</div>
-                    <div class="kv-unit">bytes per token (per GPU)</div>
-                    <div class="kv-detail">
-                        <div class="detail-row">
-                            <span class="detail-label">Bytes per element:</span>
-                            <span>1</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Savings vs BF16:</span>
-                            <span>50%</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // SWA note
-            if (results.slidingWindow) {
-                const maxBf16 = results.bf16 * results.slidingWindow;
-                const maxFp8 = results.fp8 * results.slidingWindow;
-                swaNoteDiv.innerHTML = `
-                    <div class="swa-note">
-                        <div class="swa-note-title">🪟 Sliding Window Attention Behavior</div>
-                        <p>This model uses sliding window attention with a window size of <strong>${formatNumber(results.slidingWindow)}</strong> tokens.</p>
-                        <div class="swa-comparison">
-                            <div class="swa-column">
-                                <div class="swa-column-title">Before Window Size (seq ≤ ${formatNumber(results.slidingWindow)})</div>
-                                <p>KV cache grows linearly:<br>
-                                <strong>BF16:</strong> ${formatNumber(results.bf16)} bytes × seq_len<br>
-                                <strong>FP8:</strong> ${formatNumber(results.fp8)} bytes × seq_len</p>
-                            </div>
-                            <div class="swa-column">
-                                <div class="swa-column-title">After Window Size (seq > ${formatNumber(results.slidingWindow)})</div>
-                                <p>KV cache is bounded:<br>
-                                <strong>BF16:</strong> ${formatBytes(maxBf16)} (max)<br>
-                                <strong>FP8:</strong> ${formatBytes(maxFp8)} (max)</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                swaNoteDiv.innerHTML = '';
-            }
-            
-            // Total memory for context
-            const usedContextLength = contextLength || results.contextLength;
-            contextDisplay.textContent = formatNumber(usedContextLength);
-            
-            let effectiveTokens = usedContextLength;
-            let isBounded = false;
-            if (results.slidingWindow && usedContextLength > results.slidingWindow) {
-                effectiveTokens = results.slidingWindow;
-                isBounded = true;
-            }
-            
-            const totalBf16 = results.bf16 * effectiveTokens;
-            const totalFp8 = results.fp8 * effectiveTokens;
-            
-            memoryGrid.innerHTML = `
-                <div class="memory-item">
-                    <div class="memory-value" style="color: #60a5fa;">${formatBytes(totalBf16)}</div>
-                    <div class="memory-label">BF16 Total (per GPU)</div>
-                </div>
-                <div class="memory-item">
-                    <div class="memory-value" style="color: #4ade80;">${formatBytes(totalFp8)}</div>
-                    <div class="memory-label">FP8 Total (per GPU)</div>
-                </div>
-                <div class="memory-item">
-                    <div class="memory-value" style="color: #f59e0b;">${formatBytes(totalBf16 - totalFp8)}</div>
-                    <div class="memory-label">FP8 Savings (per GPU)</div>
-                </div>
-            `;
-            
-            if (isBounded) {
-                swaMemoryNoteDiv.innerHTML = `
-                    <div class="swa-note" style="margin-top: 1rem;">
-                        <div class="swa-note-title">⚠️ Memory Bounded by Sliding Window</div>
-                        <p>Context length (${formatNumber(usedContextLength)}) exceeds sliding window (${formatNumber(results.slidingWindow)}). 
-                        KV cache memory is bounded at the sliding window size.</p>
-                    </div>
-                `;
-            } else {
-                swaMemoryNoteDiv.innerHTML = '';
-            }
-            
-            resultsDiv.classList.add('visible');
+        // Chart colors
+        const COLORS = [
+            '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16',
+            '#a855f7', '#0ea5e9', '#eab308', '#64748b'
+        ];
+
+        function getModelColor(index) {
+            return COLORS[index % COLORS.length];
         }
 
-        function showError(message) {
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = message;
-            errorDiv.classList.add('visible');
+        // Initialize models
+        function initModels() {
+            models = { ...BUILTIN_MODELS };
+            // Load custom models from localStorage
+            try {
+                const saved = localStorage.getItem('customModels');
+                if (saved) customModels = JSON.parse(saved);
+            } catch (e) {}
+            Object.assign(models, customModels);
         }
 
-        function hideError() {
-            document.getElementById('error-message').classList.remove('visible');
-        }
-
-        function showLoading(show) {
-            document.getElementById('loading').classList.toggle('visible', show);
-        }
-
-        async function handleCalculate() {
-            const modelPath = document.getElementById('model-path').value.trim();
+        // Render everything
+        function render() {
             const tpSize = parseInt(document.getElementById('tp-size').value) || 1;
-            const contextLengthInput = document.getElementById('context-length').value;
-            const contextLength = contextLengthInput ? parseInt(contextLengthInput) : null;
+            const dtype = document.getElementById('dtype').value;
+
+            const modelData = Object.entries(models).map(([name, config], index) => {
+                const result = calculateKVCache(config, tpSize);
+                return { name, config, result, color: getModelColor(index) };
+            });
+
+            // Sort by bytes per token (ascending)
+            modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
+
+            renderBarChart(modelData, dtype);
+            renderLineChart(modelData, dtype);
+            renderTable(modelData, tpSize);
+        }
+
+        function renderBarChart(modelData, dtype) {
+            const ctx = document.getElementById('barChart').getContext('2d');
             
+            const data = {
+                labels: modelData.map(m => m.name),
+                datasets: [{
+                    label: `KV Cache (${dtype.toUpperCase()}) bytes/token`,
+                    data: modelData.map(m => dtype === 'fp8' ? m.result.fp8 : m.result.bf16),
+                    backgroundColor: modelData.map(m => {
+                        if (m.result.useMLA) return 'rgba(168, 85, 247, 0.7)';
+                        if (m.result.slidingWindow) return 'rgba(245, 158, 11, 0.7)';
+                        return 'rgba(34, 197, 94, 0.7)';
+                    }),
+                    borderColor: modelData.map(m => {
+                        if (m.result.useMLA) return '#a855f7';
+                        if (m.result.slidingWindow) return '#f59e0b';
+                        return '#22c55e';
+                    }),
+                    borderWidth: 2
+                }]
+            };
+
+            if (barChart) barChart.destroy();
+            barChart = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const m = modelData[ctx.dataIndex];
+                                    const val = ctx.raw;
+                                    let label = `${val.toLocaleString()} bytes/token`;
+                                    if (m.result.useMLA) label += ' (MLA)';
+                                    if (m.result.slidingWindow) label += ` (SWA: ${m.result.slidingWindow.toLocaleString()})`;
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8' },
+                            title: { display: true, text: 'Bytes per Token', color: '#94a3b8' }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#f1f5f9' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLineChart(modelData, dtype) {
+            const ctx = document.getElementById('lineChart').getContext('2d');
+            
+            // Generate sequence lengths (log scale)
+            const seqLens = [];
+            for (let i = 8; i <= 20; i += 0.5) {
+                seqLens.push(Math.round(Math.pow(2, i)));
+            }
+
+            const datasets = modelData.map((m, idx) => {
+                const data = seqLens.map(seqLen => ({
+                    x: seqLen,
+                    y: getKVCacheAtSeqLen(m.result, seqLen, dtype)
+                }));
+
+                return {
+                    label: m.name,
+                    data: data,
+                    borderColor: m.color,
+                    backgroundColor: m.color + '33',
+                    fill: false,
+                    tension: 0,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    borderDash: m.result.slidingWindow ? [5, 5] : []
+                };
+            });
+
+            if (lineChart) lineChart.destroy();
+            lineChart = new Chart(ctx, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#f1f5f9', boxWidth: 12, font: { size: 10 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${formatBytes(ctx.raw.y)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'logarithmic',
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                callback: (val) => {
+                                    if ([256, 1024, 4096, 16384, 65536, 262144, 1048576].includes(val)) {
+                                        return val >= 1024 ? (val / 1024) + 'K' : val;
+                                    }
+                                    return '';
+                                }
+                            },
+                            title: { display: true, text: 'Sequence Length (tokens)', color: '#94a3b8' }
+                        },
+                        y: {
+                            type: 'logarithmic',
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                callback: (val) => formatBytes(val)
+                            },
+                            title: { display: true, text: 'KV Cache Size', color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable(modelData, tpSize) {
+            const tbody = document.getElementById('model-tbody');
+            const ctx128k = 131072;
+
+            tbody.innerHTML = modelData.map(m => {
+                const r = m.result;
+                const isCustom = m.name in customModels;
+                const typeClass = r.useMLA ? 'badge-mla' : (r.slidingWindow ? 'badge-swa' : 'badge-mha');
+                const typeText = r.useMLA ? 'MLA' : (r.slidingWindow ? 'SWA' : 'MHA');
+                
+                const bf16At128k = getKVCacheAtSeqLen(r, ctx128k, 'bf16');
+                const fp8At128k = getKVCacheAtSeqLen(r, ctx128k, 'fp8');
+
+                return `<tr>
+                    <td><strong>${m.name}</strong></td>
+                    <td><span class="badge ${typeClass}">${typeText}</span></td>
+                    <td>${r.numLayers}</td>
+                    <td>${r.useMLA ? '-' : r.kvHeads}</td>
+                    <td>${r.headDim}</td>
+                    <td>${r.bf16.toLocaleString()}</td>
+                    <td>${r.fp8.toLocaleString()}</td>
+                    <td>${formatBytes(bf16At128k)}${r.slidingWindow && ctx128k > r.slidingWindow ? '*' : ''}</td>
+                    <td>${formatBytes(fp8At128k)}${r.slidingWindow && ctx128k > r.slidingWindow ? '*' : ''}</td>
+                    <td>${isCustom ? `<button class="remove-btn" onclick="removeModel('${m.name}')">Remove</button>` : ''}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function addModel() {
+            const modelPath = document.getElementById('model-path').value.trim();
+            const displayName = document.getElementById('display-name').value.trim() || modelPath.split('/').pop();
+            const errorDiv = document.getElementById('error-message');
+
             if (!modelPath) {
-                showError('Please enter a Hugging Face model path');
+                errorDiv.textContent = 'Please enter a model path';
+                errorDiv.classList.add('visible');
                 return;
             }
-            
-            hideError();
-            document.getElementById('results').classList.remove('visible');
-            showLoading(true);
-            document.getElementById('calculate-btn').disabled = true;
-            
+
+            errorDiv.classList.remove('visible');
+            document.getElementById('add-btn').disabled = true;
+            document.getElementById('add-btn').textContent = 'Loading...';
+
             try {
-                const config = await fetchModelConfig(modelPath);
-                const results = calculateKVCache(config, tpSize);
-                displayResults(results, contextLength);
+                const url = `https://huggingface.co/${modelPath}/raw/main/config.json`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+                const config = await response.json();
+                
+                models[displayName] = config;
+                customModels[displayName] = config;
+                localStorage.setItem('customModels', JSON.stringify(customModels));
+                
+                document.getElementById('model-path').value = '';
+                document.getElementById('display-name').value = '';
+                render();
             } catch (error) {
-                showError(`Error: ${error.message}. Make sure the model path is correct and the config.json is publicly accessible.`);
+                errorDiv.textContent = `Error: ${error.message}. Make sure the model path is correct and publicly accessible.`;
+                errorDiv.classList.add('visible');
             } finally {
-                showLoading(false);
-                document.getElementById('calculate-btn').disabled = false;
+                document.getElementById('add-btn').disabled = false;
+                document.getElementById('add-btn').textContent = 'Add Model';
             }
+        }
+
+        function removeModel(name) {
+            delete models[name];
+            delete customModels[name];
+            localStorage.setItem('customModels', JSON.stringify(customModels));
+            render();
         }
 
         // Event listeners
-        document.getElementById('calculate-btn').addEventListener('click', handleCalculate);
-        document.getElementById('model-path').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleCalculate();
+        document.getElementById('add-btn').addEventListener('click', addModel);
+        document.getElementById('model-path').addEventListener('keypress', e => {
+            if (e.key === 'Enter') addModel();
         });
-        
-        // Example chips
-        document.querySelectorAll('.example-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                document.getElementById('model-path').value = chip.dataset.model;
-                handleCalculate();
-            });
-        });
+        document.getElementById('refresh-btn').addEventListener('click', render);
+        document.getElementById('tp-size').addEventListener('change', render);
+        document.getElementById('dtype').addEventListener('change', render);
 
-        // Export for testing
-        window.kvCacheCalc = { calculateKVCache, isMLA, getSlidingWindow, MLA_ARCHITECTURES, formatBytes, formatNumber };
+        // Initialize
+        initModels();
+        render();
     </script>
 </body>
 </html>
