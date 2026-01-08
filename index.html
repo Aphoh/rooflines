@@ -3,285 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KV Cache Calculator - Model Comparison</title>
+    <title>KV Cache Calculator</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --bg: #0f172a;
-            --bg-card: #1e293b;
-            --bg-input: #334155;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #475569;
-            --success: #22c55e;
-            --warning: #f59e0b;
-            --error: #ef4444;
-        }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            line-height: 1.6;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+            padding: 1rem;
         }
 
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .container { max-width: 1200px; margin: 0 auto; }
 
-        header { text-align: center; margin-bottom: 2rem; }
-
-        h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, var(--primary), #a855f7);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
-        }
-
-        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+        h2 { font-size: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
 
         .card {
-            background: var(--bg-card);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            border: 1px solid var(--border);
+            background: white;
+            border: 1px solid #ddd;
+            padding: 1rem;
+            margin-bottom: 1rem;
         }
-
-        h2 { margin-bottom: 1rem; font-size: 1.25rem; }
-        h3 { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; }
 
         .charts-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
+            gap: 1rem;
         }
 
-        @media (max-width: 1000px) {
+        @media (max-width: 900px) {
             .charts-grid { grid-template-columns: 1fr; }
         }
 
-        .chart-container {
-            background: var(--bg);
-            border-radius: 12px;
-            padding: 1rem;
-            height: 400px;
-        }
+        .chart-container { height: 350px; }
 
-        .model-table {
+        table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
         }
 
-        .model-table th, .model-table td {
-            padding: 0.75rem;
+        th, td {
+            padding: 0.5rem;
             text-align: left;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid #ddd;
         }
 
-        .model-table th {
-            color: var(--text-muted);
-            font-weight: 500;
-            position: sticky;
-            top: 0;
-            background: var(--bg-card);
-        }
-
-        .model-table tr:hover { background: rgba(99, 102, 241, 0.1); }
+        th { font-weight: 600; background: #f9f9f9; }
 
         .badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
             font-weight: 600;
         }
 
-        .badge-mla { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
-        .badge-mha { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
-        .badge-swa { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-mla { background: #e9d5ff; color: #7c3aed; }
+        .badge-mha { background: #d1fae5; color: #059669; }
+        .badge-swa { background: #fef3c7; color: #d97706; }
 
-        .add-model-section {
+        .add-section {
             display: flex;
-            gap: 1rem;
+            gap: 0.5rem;
             align-items: flex-end;
             flex-wrap: wrap;
         }
 
-        .input-wrapper { flex: 1; min-width: 250px; }
+        .input-group { flex: 1; min-width: 200px; }
+        .input-group label { display: block; font-size: 0.8rem; margin-bottom: 0.25rem; }
 
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
-
-        input {
+        input, select {
+            padding: 0.4rem;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 0.85rem;
             width: 100%;
-            padding: 0.75rem 1rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 1rem;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
         }
 
         button {
-            padding: 0.75rem 1.5rem;
-            background: var(--primary);
+            padding: 0.4rem 0.8rem;
+            background: #4f46e5;
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 0.875rem;
-            font-weight: 600;
+            border-radius: 3px;
+            font-size: 0.85rem;
             cursor: pointer;
-            transition: background 0.2s;
-            white-space: nowrap;
         }
 
-        button:hover { background: var(--primary-dark); }
+        button:hover { background: #4338ca; }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .error-message {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid var(--error);
-            color: var(--error);
-            padding: 0.75rem;
-            border-radius: 8px;
-            margin-top: 1rem;
-            font-size: 0.875rem;
+        .remove-btn {
+            background: transparent;
+            color: #dc2626;
+            padding: 0.2rem 0.4rem;
+            font-size: 0.7rem;
+        }
+
+        .remove-btn:hover { background: #fee2e2; }
+
+        .error {
+            background: #fee2e2;
+            border: 1px solid #dc2626;
+            color: #dc2626;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
             display: none;
         }
 
-        .error-message.visible { display: block; }
+        .error.visible { display: block; }
 
         .controls {
             display: flex;
             gap: 1rem;
             align-items: center;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
+            margin-bottom: 0.5rem;
         }
 
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .control-group label {
-            margin-bottom: 0;
-            white-space: nowrap;
-        }
-
-        .control-group input {
-            width: 100px;
-        }
-
-        select {
-            padding: 0.5rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text);
-            font-size: 0.875rem;
-        }
+        .controls select { width: auto; }
 
         .legend-note {
             font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 1rem;
+            color: #666;
+            margin-top: 0.5rem;
         }
 
-        .table-scroll {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .remove-btn {
-            background: transparent;
-            color: var(--error);
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
-        }
-
-        .remove-btn:hover { background: rgba(239, 68, 68, 0.2); }
-
-        footer {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
-
-        footer a { color: var(--primary); text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
+        .table-wrap { max-height: 350px; overflow-y: auto; }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>KV Cache Calculator</h1>
-            <p class="subtitle">Compare KV cache memory requirements across LLM models</p>
-        </header>
+        <h1>KV Cache Calculator</h1>
 
         <div class="card">
             <h2>Add Custom Model</h2>
-            <div class="add-model-section">
-                <div class="input-wrapper">
-                    <label for="model-path">Hugging Face Model Path</label>
-                    <input type="text" id="model-path" placeholder="e.g., organization/model-name">
+            <div class="add-section">
+                <div class="input-group">
+                    <label>HuggingFace Model Path</label>
+                    <input type="text" id="model-path" placeholder="org/model-name">
                 </div>
-                <div class="input-wrapper" style="max-width: 150px;">
-                    <label for="display-name">Display Name (optional)</label>
-                    <input type="text" id="display-name" placeholder="Short name">
+                <div class="input-group" style="max-width: 120px;">
+                    <label>Display Name</label>
+                    <input type="text" id="display-name" placeholder="Optional">
                 </div>
-                <button id="add-btn">Add Model</button>
+                <button id="add-btn">Add</button>
             </div>
-            <div class="error-message" id="error-message"></div>
+            <div class="error" id="error-message"></div>
         </div>
 
         <div class="card">
-            <h2>Controls</h2>
             <div class="controls">
-                <div class="control-group">
-                    <label for="tp-size">Tensor Parallel Size:</label>
-                    <input type="number" id="tp-size" value="1" min="1" max="64">
-                </div>
-                <div class="control-group">
-                    <label for="dtype">Data Type:</label>
-                    <select id="dtype">
-                        <option value="bf16">BF16 (2 bytes)</option>
-                        <option value="fp8">FP8 (1 byte)</option>
-                    </select>
-                </div>
-                <button id="refresh-btn">Refresh Charts</button>
+                <label>Data Type:</label>
+                <select id="dtype">
+                    <option value="bf16">BF16</option>
+                    <option value="fp8">FP8</option>
+                </select>
             </div>
         </div>
 
         <div class="charts-grid">
             <div class="card">
                 <h2>KV Cache Bytes per Token</h2>
-                <h3>Lower is better - MLA models have compressed KV cache</h3>
                 <div class="chart-container">
                     <canvas id="barChart"></canvas>
                 </div>
             </div>
             <div class="card">
                 <h2>KV Cache Size vs Sequence Length</h2>
-                <h3>Log-log scale - SWA models plateau at window size</h3>
                 <div class="chart-container">
                     <canvas id="lineChart"></canvas>
                 </div>
@@ -290,8 +182,8 @@
 
         <div class="card">
             <h2>Model Details</h2>
-            <div class="table-scroll">
-                <table class="model-table" id="model-table">
+            <div class="table-wrap">
+                <table>
                     <thead>
                         <tr>
                             <th>Model</th>
@@ -310,23 +202,16 @@
                 </table>
             </div>
             <div class="legend-note">
-                <strong>Type:</strong> 
-                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention (compressed KV) |
+                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
                 <span class="badge badge-mha">MHA</span> Multi-Head Attention |
-                <span class="badge badge-swa">SWA</span> Sliding Window (bounded memory)
+                <span class="badge badge-swa">SWA/Hybrid</span> Sliding Window
             </div>
         </div>
-
-        <footer>
-            <p>KV Cache Calculator - Compare memory requirements across transformer models</p>
-        </footer>
     </div>
 
     <script>
-        // Pre-loaded model configurations
         const BUILTIN_MODELS = {
             "GPT-OSS-120B": {
-                // From unsloth/gpt-oss-120b
                 architectures: ["GptOssForCausalLM"],
                 num_hidden_layers: 36,
                 num_attention_heads: 64,
@@ -335,7 +220,6 @@
                 hidden_size: 2880,
                 max_position_embeddings: 131072,
                 sliding_window: 128,
-                // Alternating sliding/full attention: 18 sliding + 18 full layers
                 layer_types: ["sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention"],
             },
             "DeepSeek-V3": {
@@ -453,7 +337,6 @@
             }
         };
 
-        // MLA architectures
         const MLA_ARCHITECTURES = [
             'DeepseekV2ForCausalLM', 'DeepseekV32ForCausalLM', 'DeepseekV3ForCausalLM',
             'DeepseekV3ForCausalLMNextN', 'DeepseekVL2ForCausalLM', 'LongcatFlashForCausalLM',
@@ -461,14 +344,12 @@
             'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM'
         ];
 
-        const BYTES_PER_DTYPE = { bf16: 2, fp16: 2, fp8: 1 };
+        const BYTES_PER_DTYPE = { bf16: 2, fp8: 1 };
 
-        // Model state
         let models = {};
         let customModels = {};
         let barChart, lineChart;
 
-        // Utility functions
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
@@ -478,31 +359,27 @@
         }
 
         function isMLA(config) {
-            const archs = config.architectures || [];
-            // Check for kv_lora_rank as definitive MLA indicator
             if (config.kv_lora_rank) return true;
-            return archs.some(a => MLA_ARCHITECTURES.includes(a));
+            return (config.architectures || []).some(a => MLA_ARCHITECTURES.includes(a));
         }
 
         function getSlidingWindow(config) {
             let sw = config.sliding_window;
             if (Array.isArray(sw)) sw = sw.find(v => v !== null);
-            // Don't use sliding window if use_sliding_window is explicitly false
             if (config.use_sliding_window === false) return null;
             return sw || null;
         }
 
-        function calculateKVCache(config, tpSize = 1) {
+        function calculateKVCache(config) {
             const numLayers = config.num_hidden_layers || 32;
             const useMLA = isMLA(config);
             const slidingWindow = getSlidingWindow(config);
             const layerTypes = config.layer_types || null;
 
-            let bf16, fp8, kvHeads, headDim, latentDim;
+            let bf16, fp8, kvHeads, headDim;
             let numFullLayers = numLayers;
             let numSlidingLayers = 0;
 
-            // Count full vs sliding attention layers for hybrid models
             if (layerTypes && Array.isArray(layerTypes)) {
                 numFullLayers = layerTypes.filter(t => t === 'full_attention').length;
                 numSlidingLayers = layerTypes.filter(t => t === 'sliding_attention').length;
@@ -511,7 +388,7 @@
             if (useMLA) {
                 const kvLoraRank = config.kv_lora_rank || 512;
                 const qkRopeHeadDim = config.qk_rope_head_dim || 64;
-                latentDim = kvLoraRank + qkRopeHeadDim;
+                const latentDim = kvLoraRank + qkRopeHeadDim;
                 bf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
                 fp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
                 kvHeads = 1;
@@ -520,40 +397,34 @@
                 const numKVHeads = config.num_key_value_heads || config.num_attention_heads || 32;
                 const defaultHeadDim = config.hidden_size ? Math.floor(config.hidden_size / (config.num_attention_heads || 32)) : 128;
                 headDim = config.head_dim || defaultHeadDim;
-                const kvHeadsPerTP = Math.max(1, Math.floor(numKVHeads / tpSize));
-                bf16 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
-                fp8 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
-                kvHeads = kvHeadsPerTP;
+                bf16 = 2 * numLayers * numKVHeads * headDim * BYTES_PER_DTYPE.bf16;
+                fp8 = 2 * numLayers * numKVHeads * headDim * BYTES_PER_DTYPE.fp8;
+                kvHeads = numKVHeads;
             }
 
             return {
                 bf16, fp8, useMLA, slidingWindow,
                 numLayers, kvHeads, headDim,
                 numFullLayers, numSlidingLayers,
-                layerTypes: layerTypes ? true : false,
+                hasHybrid: layerTypes !== null && numSlidingLayers > 0,
                 maxCtx: config.max_position_embeddings || 32768
             };
         }
 
         function getKVCacheAtSeqLen(result, seqLen, dtype) {
-            const bytesPerElement = dtype === 'fp8' ? BYTES_PER_DTYPE.fp8 : BYTES_PER_DTYPE.bf16;
+            const bytesPerElement = BYTES_PER_DTYPE[dtype];
             
-            // For hybrid attention (some sliding, some full layers)
-            if (result.layerTypes && result.numSlidingLayers > 0 && result.slidingWindow) {
+            if (result.hasHybrid && result.slidingWindow) {
                 const bytesPerLayerPerToken = 2 * result.kvHeads * result.headDim * bytesPerElement;
-                
                 if (seqLen <= result.slidingWindow) {
-                    // All layers contribute fully
                     return result.numLayers * bytesPerLayerPerToken * seqLen;
                 } else {
-                    // Sliding layers bounded, full layers grow
                     const slidingContrib = result.numSlidingLayers * bytesPerLayerPerToken * result.slidingWindow;
                     const fullContrib = result.numFullLayers * bytesPerLayerPerToken * seqLen;
                     return slidingContrib + fullContrib;
                 }
             }
             
-            // Standard sliding window (all layers bounded)
             const bytesPerToken = dtype === 'fp8' ? result.fp8 : result.bf16;
             if (result.slidingWindow && seqLen > result.slidingWindow) {
                 return bytesPerToken * result.slidingWindow;
@@ -561,21 +432,13 @@
             return bytesPerToken * seqLen;
         }
 
-        // Chart colors
         const COLORS = [
             '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
-            '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16',
-            '#a855f7', '#0ea5e9', '#eab308', '#64748b'
+            '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16'
         ];
 
-        function getModelColor(index) {
-            return COLORS[index % COLORS.length];
-        }
-
-        // Initialize models
         function initModels() {
             models = { ...BUILTIN_MODELS };
-            // Load custom models from localStorage
             try {
                 const saved = localStorage.getItem('customModels');
                 if (saved) customModels = JSON.parse(saved);
@@ -583,79 +446,46 @@
             Object.assign(models, customModels);
         }
 
-        // Render everything
         function render() {
-            const tpSize = parseInt(document.getElementById('tp-size').value) || 1;
             const dtype = document.getElementById('dtype').value;
 
             const modelData = Object.entries(models).map(([name, config], index) => {
-                const result = calculateKVCache(config, tpSize);
-                return { name, config, result, color: getModelColor(index) };
+                const result = calculateKVCache(config);
+                return { name, config, result, color: COLORS[index % COLORS.length] };
             });
 
-            // Sort by bytes per token (ascending)
             modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
 
             renderBarChart(modelData, dtype);
             renderLineChart(modelData, dtype);
-            renderTable(modelData, tpSize);
+            renderTable(modelData);
         }
 
         function renderBarChart(modelData, dtype) {
             const ctx = document.getElementById('barChart').getContext('2d');
             
-            const data = {
-                labels: modelData.map(m => m.name),
-                datasets: [{
-                    label: `KV Cache (${dtype.toUpperCase()}) bytes/token`,
-                    data: modelData.map(m => dtype === 'fp8' ? m.result.fp8 : m.result.bf16),
-                    backgroundColor: modelData.map(m => {
-                        if (m.result.useMLA) return 'rgba(168, 85, 247, 0.7)';
-                        if (m.result.slidingWindow) return 'rgba(245, 158, 11, 0.7)';
-                        return 'rgba(34, 197, 94, 0.7)';
-                    }),
-                    borderColor: modelData.map(m => {
-                        if (m.result.useMLA) return '#a855f7';
-                        if (m.result.slidingWindow) return '#f59e0b';
-                        return '#22c55e';
-                    }),
-                    borderWidth: 2
-                }]
-            };
-
             if (barChart) barChart.destroy();
             barChart = new Chart(ctx, {
                 type: 'bar',
-                data: data,
+                data: {
+                    labels: modelData.map(m => m.name),
+                    datasets: [{
+                        data: modelData.map(m => dtype === 'fp8' ? m.result.fp8 : m.result.bf16),
+                        backgroundColor: modelData.map(m => {
+                            if (m.result.useMLA) return '#c084fc';
+                            if (m.result.slidingWindow) return '#fbbf24';
+                            return '#4ade80';
+                        })
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (ctx) => {
-                                    const m = modelData[ctx.dataIndex];
-                                    const val = ctx.raw;
-                                    let label = `${val.toLocaleString()} bytes/token`;
-                                    if (m.result.useMLA) label += ' (MLA)';
-                                    if (m.result.slidingWindow) label += ` (SWA: ${m.result.slidingWindow.toLocaleString()})`;
-                                    return label;
-                                }
-                            }
-                        }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: {
-                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                            ticks: { color: '#94a3b8' },
-                            title: { display: true, text: 'Bytes per Token', color: '#94a3b8' }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: { color: '#f1f5f9' }
-                        }
+                        x: { title: { display: true, text: 'Bytes/Token' } },
+                        y: { ticks: { font: { size: 10 } } }
                     }
                 }
             });
@@ -664,30 +494,18 @@
         function renderLineChart(modelData, dtype) {
             const ctx = document.getElementById('lineChart').getContext('2d');
             
-            // Generate sequence lengths (log scale)
             const seqLens = [];
-            for (let i = 8; i <= 20; i += 0.5) {
-                seqLens.push(Math.round(Math.pow(2, i)));
-            }
+            for (let i = 8; i <= 20; i += 0.5) seqLens.push(Math.round(Math.pow(2, i)));
 
-            const datasets = modelData.map((m, idx) => {
-                const data = seqLens.map(seqLen => ({
-                    x: seqLen,
-                    y: getKVCacheAtSeqLen(m.result, seqLen, dtype)
-                }));
-
-                return {
-                    label: m.name,
-                    data: data,
-                    borderColor: m.color,
-                    backgroundColor: m.color + '33',
-                    fill: false,
-                    tension: 0,
-                    pointRadius: 0,
-                    borderWidth: 2,
-                    borderDash: m.result.slidingWindow ? [5, 5] : []
-                };
-            });
+            const datasets = modelData.map((m, idx) => ({
+                label: m.name,
+                data: seqLens.map(s => ({ x: s, y: getKVCacheAtSeqLen(m.result, s, dtype) })),
+                borderColor: m.color,
+                fill: false,
+                pointRadius: 0,
+                borderWidth: 1.5,
+                borderDash: m.result.slidingWindow ? [4, 4] : []
+            }));
 
             if (lineChart) lineChart.destroy();
             lineChart = new Chart(ctx, {
@@ -696,48 +514,27 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: false },
                     plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: { color: '#f1f5f9', boxWidth: 12, font: { size: 10 } }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (ctx) => `${ctx.dataset.label}: ${formatBytes(ctx.raw.y)}`
-                            }
-                        }
+                        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } },
+                        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatBytes(ctx.raw.y)}` } }
                     },
                     scales: {
                         x: {
                             type: 'logarithmic',
-                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                            ticks: {
-                                color: '#94a3b8',
-                                callback: (val) => {
-                                    if ([256, 1024, 4096, 16384, 65536, 262144, 1048576].includes(val)) {
-                                        return val >= 1024 ? (val / 1024) + 'K' : val;
-                                    }
-                                    return '';
-                                }
-                            },
-                            title: { display: true, text: 'Sequence Length (tokens)', color: '#94a3b8' }
+                            title: { display: true, text: 'Sequence Length' },
+                            ticks: { callback: v => [256,1024,4096,16384,65536,262144].includes(v) ? (v>=1024?(v/1024)+'K':v) : '' }
                         },
                         y: {
                             type: 'logarithmic',
-                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                            ticks: {
-                                color: '#94a3b8',
-                                callback: (val) => formatBytes(val)
-                            },
-                            title: { display: true, text: 'KV Cache Size', color: '#94a3b8' }
+                            title: { display: true, text: 'KV Cache Size' },
+                            ticks: { callback: v => formatBytes(v) }
                         }
                     }
                 }
             });
         }
 
-        function renderTable(modelData, tpSize) {
+        function renderTable(modelData) {
             const tbody = document.getElementById('model-tbody');
             const ctx128k = 131072;
 
@@ -746,30 +543,18 @@
                 const isCustom = m.name in customModels;
                 
                 let typeClass, typeText;
-                if (r.useMLA) {
-                    typeClass = 'badge-mla';
-                    typeText = 'MLA';
-                } else if (r.layerTypes && r.numSlidingLayers > 0) {
-                    typeClass = 'badge-swa';
-                    typeText = `Hybrid`;
-                } else if (r.slidingWindow) {
-                    typeClass = 'badge-swa';
-                    typeText = 'SWA';
-                } else {
-                    typeClass = 'badge-mha';
-                    typeText = 'MHA';
-                }
+                if (r.useMLA) { typeClass = 'badge-mla'; typeText = 'MLA'; }
+                else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hybrid'; }
+                else if (r.slidingWindow) { typeClass = 'badge-swa'; typeText = 'SWA'; }
+                else { typeClass = 'badge-mha'; typeText = 'MHA'; }
                 
                 const bf16At128k = getKVCacheAtSeqLen(r, ctx128k, 'bf16');
                 const fp8At128k = getKVCacheAtSeqLen(r, ctx128k, 'fp8');
                 
-                // Show layers info for hybrid
                 let layersInfo = r.numLayers;
-                if (r.layerTypes && r.numSlidingLayers > 0) {
-                    layersInfo = `${r.numFullLayers}F+${r.numSlidingLayers}S`;
-                }
+                if (r.hasHybrid) layersInfo = `${r.numFullLayers}F+${r.numSlidingLayers}S`;
                 
-                const hasBounding = r.slidingWindow && ctx128k > r.slidingWindow;
+                const bounded = r.slidingWindow && ctx128k > r.slidingWindow;
 
                 return `<tr>
                     <td><strong>${m.name}</strong></td>
@@ -779,9 +564,9 @@
                     <td>${r.headDim}</td>
                     <td>${r.bf16.toLocaleString()}</td>
                     <td>${r.fp8.toLocaleString()}</td>
-                    <td>${formatBytes(bf16At128k)}${hasBounding ? '*' : ''}</td>
-                    <td>${formatBytes(fp8At128k)}${hasBounding ? '*' : ''}</td>
-                    <td>${isCustom ? `<button class="remove-btn" onclick="removeModel('${m.name}')">Remove</button>` : ''}</td>
+                    <td>${formatBytes(bf16At128k)}${bounded ? '*' : ''}</td>
+                    <td>${formatBytes(fp8At128k)}${bounded ? '*' : ''}</td>
+                    <td>${isCustom ? `<button class="remove-btn" onclick="removeModel('${m.name}')">×</button>` : ''}</td>
                 </tr>`;
             }).join('');
         }
@@ -799,12 +584,11 @@
 
             errorDiv.classList.remove('visible');
             document.getElementById('add-btn').disabled = true;
-            document.getElementById('add-btn').textContent = 'Loading...';
 
             try {
                 const url = `https://huggingface.co/${modelPath}/raw/main/config.json`;
                 const response = await fetch(url);
-                if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const config = await response.json();
                 
                 models[displayName] = config;
@@ -815,11 +599,10 @@
                 document.getElementById('display-name').value = '';
                 render();
             } catch (error) {
-                errorDiv.textContent = `Error: ${error.message}. Make sure the model path is correct and publicly accessible.`;
+                errorDiv.textContent = `Error: ${error.message}`;
                 errorDiv.classList.add('visible');
             } finally {
                 document.getElementById('add-btn').disabled = false;
-                document.getElementById('add-btn').textContent = 'Add Model';
             }
         }
 
@@ -830,16 +613,10 @@
             render();
         }
 
-        // Event listeners
         document.getElementById('add-btn').addEventListener('click', addModel);
-        document.getElementById('model-path').addEventListener('keypress', e => {
-            if (e.key === 'Enter') addModel();
-        });
-        document.getElementById('refresh-btn').addEventListener('click', render);
-        document.getElementById('tp-size').addEventListener('change', render);
+        document.getElementById('model-path').addEventListener('keypress', e => { if (e.key === 'Enter') addModel(); });
         document.getElementById('dtype').addEventListener('change', render);
 
-        // Initialize
         initModels();
         render();
     </script>
