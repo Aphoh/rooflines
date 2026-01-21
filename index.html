@@ -214,6 +214,20 @@
         </div>
 
         <div class="card">
+            <h2>Model Size vs KV Cache Bytes per Token</h2>
+            <div class="controls">
+                <label>Parameter Type:</label>
+                <select id="param-type">
+                    <option value="active">Active Parameters</option>
+                    <option value="total">Total Parameters</option>
+                </select>
+            </div>
+            <div class="chart-container">
+                <canvas id="scatterChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>KV Cache Size vs Sequence Length</h2>
             <div class="chart-container">
                 <canvas id="lineChart"></canvas>
@@ -278,6 +292,8 @@
                 max_position_embeddings: 131072,
                 sliding_window: 128,
                 layer_types: ["sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention"],
+                total_params_b: 120,
+                active_params_b: 20
             },
             "DeepSeek-V3": {
                 architectures: ["DeepseekV3ForCausalLM"],
@@ -286,7 +302,9 @@
                 qk_rope_head_dim: 64,
                 num_attention_heads: 128,
                 hidden_size: 7168,
-                max_position_embeddings: 163840
+                max_position_embeddings: 163840,
+                total_params_b: 671,
+                active_params_b: 37
             },
             "DeepSeek-R1": {
                 architectures: ["DeepseekV3ForCausalLM"],
@@ -295,7 +313,9 @@
                 qk_rope_head_dim: 64,
                 num_attention_heads: 128,
                 hidden_size: 7168,
-                max_position_embeddings: 163840
+                max_position_embeddings: 163840,
+                total_params_b: 671,
+                active_params_b: 37
             },
             "Kimi-K2": {
                 architectures: ["DeepseekV3ForCausalLM"],
@@ -305,7 +325,9 @@
                 qk_rope_head_dim: 64,
                 num_attention_heads: 64,
                 hidden_size: 7168,
-                max_position_embeddings: 131072
+                max_position_embeddings: 131072,
+                total_params_b: 1029,
+                active_params_b: 32
             },
             "GLM-4.5": {
                 architectures: ["Glm4MoeForCausalLM"],
@@ -314,7 +336,9 @@
                 num_key_value_heads: 8,
                 head_dim: 128,
                 hidden_size: 5120,
-                max_position_embeddings: 131072
+                max_position_embeddings: 131072,
+                total_params_b: 358,
+                active_params_b: 32
             },
             "MiniMax-M2.1": {
                 architectures: ["MiniMaxM2ForCausalLM"],
@@ -323,7 +347,9 @@
                 num_key_value_heads: 8,
                 head_dim: 128,
                 hidden_size: 3072,
-                max_position_embeddings: 196608
+                max_position_embeddings: 196608,
+                total_params_b: 229,
+                active_params_b: 10
             },
             "Qwen3-235B-A22B": {
                 architectures: ["Qwen3MoeForCausalLM"],
@@ -332,7 +358,9 @@
                 num_key_value_heads: 4,
                 head_dim: 128,
                 hidden_size: 4096,
-                max_position_embeddings: 40960
+                max_position_embeddings: 40960,
+                total_params_b: 235,
+                active_params_b: 22
             },
             "Qwen2.5-72B": {
                 architectures: ["Qwen2ForCausalLM"],
@@ -343,7 +371,9 @@
                 hidden_size: 8192,
                 max_position_embeddings: 32768,
                 sliding_window: 131072,
-                use_sliding_window: false
+                use_sliding_window: false,
+                total_params_b: 72,
+                active_params_b: 72
             },
             "Qwen2.5-7B": {
                 architectures: ["Qwen2ForCausalLM"],
@@ -352,7 +382,9 @@
                 num_key_value_heads: 4,
                 head_dim: 128,
                 hidden_size: 3584,
-                max_position_embeddings: 32768
+                max_position_embeddings: 32768,
+                total_params_b: 7,
+                active_params_b: 7
             },
             "Llama-3.1-70B": {
                 architectures: ["LlamaForCausalLM"],
@@ -361,7 +393,9 @@
                 num_key_value_heads: 8,
                 head_dim: 128,
                 hidden_size: 8192,
-                max_position_embeddings: 131072
+                max_position_embeddings: 131072,
+                total_params_b: 70,
+                active_params_b: 70
             },
             "Llama-3.1-8B": {
                 architectures: ["LlamaForCausalLM"],
@@ -370,7 +404,9 @@
                 num_key_value_heads: 8,
                 head_dim: 128,
                 hidden_size: 4096,
-                max_position_embeddings: 131072
+                max_position_embeddings: 131072,
+                total_params_b: 8,
+                active_params_b: 8
             }
         };
 
@@ -385,7 +421,7 @@
 
         let models = {};
         let customModels = {};
-        let barChart, lineChart, requestsChart;
+        let barChart, lineChart, requestsChart, scatterChart;
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -494,6 +530,7 @@
             modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
 
             renderBarChart(modelData, dtype);
+            renderScatterChart(modelData, dtype);
             renderLineChart(modelData, dtype);
             renderRequestsChart(modelData, dtype);
             renderTable(modelData);
@@ -543,6 +580,157 @@
                         y: { ticks: { font: { size: 10 } } }
                     }
                 }
+            });
+        }
+
+        function renderScatterChart(modelData, dtype) {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            const paramType = document.getElementById('param-type').value;
+            
+            // Filter to models that have size data
+            const modelsWithSize = modelData.filter(m => 
+                m.config.total_params_b !== undefined && m.config.active_params_b !== undefined
+            );
+            
+            const data = modelsWithSize.map(m => {
+                const params = paramType === 'total' ? m.config.total_params_b : m.config.active_params_b;
+                const bytesPerToken = dtype === 'fp8' ? m.result.fp8 : m.result.bf16;
+                return {
+                    x: params,
+                    y: bytesPerToken,
+                    name: m.name,
+                    model: m
+                };
+            });
+
+            if (scatterChart) scatterChart.destroy();
+            scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        data: data,
+                        backgroundColor: modelsWithSize.map(m => {
+                            if (m.result.useMLA) return '#c084fc';
+                            if (m.result.slidingWindow) return '#fbbf24';
+                            return '#4ade80';
+                        }),
+                        pointRadius: 8,
+                        pointHoverRadius: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const point = context.raw;
+                                    const m = point.model;
+                                    let label = `${point.name}: ${point.x}B params, ${point.y.toLocaleString()} bytes/token`;
+                                    if (m.result.useMLA) label += ' (MLA)';
+                                    else if (m.result.hasHybrid) label += ' (Hybrid-SWA)';
+                                    else if (m.result.slidingWindow) label += ' (SWA)';
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'logarithmic',
+                            title: { display: true, text: paramType === 'total' ? 'Total Parameters (B)' : 'Active Parameters (B)' },
+                            ticks: {
+                                callback: function(v) {
+                                    if ([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].includes(v)) {
+                                        return v + 'B';
+                                    }
+                                    return '';
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'logarithmic',
+                            title: { display: true, text: 'KV Cache Bytes per Token' },
+                            ticks: { callback: v => v.toLocaleString() }
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'labelPoints',
+                    afterDatasetsDraw: function(chart) {
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+                        ctx.fillStyle = '#333';
+                        
+                        // Collect all label positions
+                        const labels = [];
+                        const meta = chart.getDatasetMeta(0);
+                        
+                        chart.data.datasets[0].data.forEach((point, i) => {
+                            const element = meta.data[i];
+                            if (element) {
+                                const textWidth = ctx.measureText(point.name).width;
+                                labels.push({
+                                    name: point.name,
+                                    x: element.x,
+                                    y: element.y - 14,
+                                    width: textWidth,
+                                    height: 12,
+                                    offsetY: -14
+                                });
+                            }
+                        });
+                        
+                        // Simple collision resolution - iterate multiple times
+                        for (let iteration = 0; iteration < 10; iteration++) {
+                            for (let i = 0; i < labels.length; i++) {
+                                for (let j = i + 1; j < labels.length; j++) {
+                                    const a = labels[i];
+                                    const b = labels[j];
+                                    
+                                    // Check for overlap
+                                    const overlapX = Math.abs(a.x - b.x) < (a.width + b.width) / 2 + 4;
+                                    const overlapY = Math.abs(a.y - b.y) < (a.height + b.height) / 2 + 2;
+                                    
+                                    if (overlapX && overlapY) {
+                                        // Push labels apart vertically
+                                        if (a.y < b.y) {
+                                            a.y -= 6;
+                                            b.y += 6;
+                                        } else {
+                                            a.y += 6;
+                                            b.y -= 6;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Draw labels with leader lines if moved significantly
+                        labels.forEach((label, i) => {
+                            const element = meta.data[i];
+                            const originalY = element.y - 14;
+                            
+                            // Draw leader line if label moved
+                            if (Math.abs(label.y - originalY) > 10) {
+                                ctx.beginPath();
+                                ctx.strokeStyle = '#999';
+                                ctx.lineWidth = 0.5;
+                                ctx.moveTo(element.x, element.y - 8);
+                                ctx.lineTo(label.x, label.y + 4);
+                                ctx.stroke();
+                            }
+                            
+                            ctx.textAlign = 'center';
+                            ctx.fillText(label.name, label.x, label.y);
+                        });
+                        
+                        ctx.restore();
+                    }
+                }]
             });
         }
 
@@ -766,6 +954,7 @@
         document.getElementById('add-btn').addEventListener('click', addModel);
         document.getElementById('model-path').addEventListener('keypress', e => { if (e.key === 'Enter') addModel(); });
         document.getElementById('dtype').addEventListener('change', render);
+        document.getElementById('param-type').addEventListener('change', render);
         document.getElementById('gpu-memory').addEventListener('input', () => { updateSliderLabels(); render(); });
         document.getElementById('seq-length').addEventListener('input', () => { updateSliderLabels(); render(); });
 
