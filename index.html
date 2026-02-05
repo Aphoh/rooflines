@@ -54,6 +54,7 @@
         .badge-mla { background: #e9d5ff; color: #7c3aed; }
         .badge-mha { background: #d1fae5; color: #059669; }
         .badge-swa { background: #fef3c7; color: #d97706; }
+        .badge-err { background: #fee2e2; color: #dc2626; }
 
         .add-section {
             display: flex;
@@ -174,6 +175,60 @@
             cursor: pointer;
             border: none;
         }
+
+        .preset-btn {
+            padding: 0.15rem 0.4rem;
+            font-size: 0.7rem;
+            background: #e5e7eb;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .preset-btn:hover {
+            background: #d1d5db;
+        }
+
+        .download-btn {
+            padding: 0.15rem 0.4rem;
+            font-size: 0.65rem;
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        .download-btn:hover {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .scatter-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .scatter-col {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .scatter-col h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .chart-container-half {
+            height: 350px;
+        }
+
+        @media (max-width: 700px) {
+            .scatter-col {
+                min-width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -201,53 +256,93 @@
                 <label>Data Type:</label>
                 <select id="dtype">
                     <option value="bf16">BF16</option>
-                    <option value="fp8">FP8</option>
+                    <option value="fp8" selected>FP8</option>
                 </select>
             </div>
         </div>
 
         <div class="card">
-            <h2>KV Cache Bytes per Token</h2>
+            <h2>KV Cache Bytes per Token <button class="download-btn" onclick="downloadChart('barChart', 'kv-bytes-per-token', 'KV Cache Bytes per Token')">↓ PNG</button></h2>
             <div class="chart-container">
                 <canvas id="barChart"></canvas>
+            </div>
+            <div class="legend-note">
+                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
+                <span class="badge badge-mha">MHA</span> Multi-Head Attention |
+                <span class="badge badge-swa">SWA</span> Sliding Window
             </div>
         </div>
 
         <div class="card">
             <h2>Model Size vs KV Cache Bytes per Token</h2>
-            <div class="controls">
-                <label>Parameter Type:</label>
-                <select id="param-type">
-                    <option value="active">Active Parameters</option>
-                    <option value="total">Total Parameters</option>
-                </select>
-            </div>
-            <div class="chart-container">
-                <canvas id="scatterChart"></canvas>
+            <div class="scatter-row">
+                <div class="scatter-col">
+                    <h3>Active Parameters <button class="download-btn" onclick="downloadChart('scatterChartActive', 'active-params-vs-kv', 'Active Parameters vs KV Cache Bytes per Token')">↓ PNG</button></h3>
+                    <div class="chart-container-half">
+                        <canvas id="scatterChartActive"></canvas>
+                    </div>
+                </div>
+                <div class="scatter-col">
+                    <h3>Total Parameters <button class="download-btn" onclick="downloadChart('scatterChartTotal', 'total-params-vs-kv', 'Total Parameters vs KV Cache Bytes per Token')">↓ PNG</button></h3>
+                    <div class="chart-container-half">
+                        <canvas id="scatterChartTotal"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="card">
-            <h2>KV Cache Size vs Sequence Length</h2>
+            <h2>KV Cache Size vs Sequence Length <button class="download-btn" onclick="downloadChart('lineChart', 'kv-vs-seqlen', 'KV Cache Size vs Sequence Length')">↓ PNG</button></h2>
             <div class="chart-container">
                 <canvas id="lineChart"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <h2>Max Requests per GPU</h2>
+            <h2>Max Tokens in Flight (per GPU) <button class="download-btn" onclick="downloadChart('batchChart', 'max-tokens-in-flight', 'Max Tokens in Flight (per GPU)')">↓ PNG</button></h2>
+            <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.75rem;">
+                Total tokens = (GPU × 0.9 − weights/N) / KV per token = batch × seq_len
+            </p>
             <div class="slider-controls">
                 <div class="slider-group">
-                    <label>GPU Memory: <span id="gpu-memory-value">80 GB</span></label>
-                    <input type="range" id="gpu-memory" min="1" max="280" value="80">
+                    <label>GPU Memory: <span id="batch-gpu-memory-value">192 GB</span>
+                        <span style="margin-left: 0.5rem;">
+                            <button type="button" class="preset-btn" onclick="setGpuMemory(80)">80</button>
+                            <button type="button" class="preset-btn" onclick="setGpuMemory(192)">192</button>
+                            <button type="button" class="preset-btn" onclick="setGpuMemory(280)">280</button>
+                        </span>
+                    </label>
+                    <input type="range" id="batch-gpu-memory" min="1" max="280" value="192">
                 </div>
-                <div class="slider-group">
-                    <label>Sequence Length: <span id="seq-length-value">32K</span></label>
-                    <input type="range" id="seq-length" min="10" max="19" value="15" step="0.5">
+                <div class="slider-group" style="flex: 0.5; min-width: 100px;">
+                    <label>GPUs</label>
+                    <select id="num-gpus">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="4">4</option>
+                        <option value="8" selected>8</option>
+                        <option value="16">16</option>
+                        <option value="32">32</option>
+                        <option value="64">64</option>
+                    </select>
+                </div>
+                <div class="slider-group" style="flex: 0.5; min-width: 120px;">
+                    <label>Weight Precision</label>
+                    <select id="weight-dtype">
+                        <option value="fp16">FP16 (2B/param)</option>
+                        <option value="fp8" selected>FP8 (1B/param)</option>
+                        <option value="nvfp4">NVFP4 (~0.56B/param)</option>
+                    </select>
                 </div>
             </div>
             <div class="chart-container">
-                <canvas id="requestsChart"></canvas>
+                <canvas id="batchChart"></canvas>
+            </div>
+            <div class="legend-note">
+                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
+                <span class="badge badge-mha">MHA</span> Multi-Head Attention |
+                <span class="badge badge-swa">SWA</span> Sliding Window |
+                <span class="badge badge-err">—</span> Exceeds GPU capacity
             </div>
         </div>
 
@@ -418,10 +513,11 @@
         ];
 
         const BYTES_PER_DTYPE = { bf16: 2, fp8: 1 };
+        const WEIGHT_BYTES = { fp16: 2, fp8: 1, nvfp4: 0.56 };
 
         let models = {};
         let customModels = {};
-        let barChart, lineChart, requestsChart, scatterChart;
+        let barChart, lineChart, scatterChartActive, scatterChartTotal, batchChart;
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -429,6 +525,41 @@
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function downloadChart(canvasId, filename, title) {
+            const canvas = document.getElementById(canvasId);
+            const titleHeight = 60;
+
+            // Create a new canvas with space for title
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.width;
+            exportCanvas.height = canvas.height + titleHeight;
+            const ctx = exportCanvas.getContext('2d');
+
+            // White background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            // Draw title
+            ctx.fillStyle = '#333333';
+            ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(title, exportCanvas.width / 2, titleHeight - 16);
+
+            // Draw chart
+            ctx.drawImage(canvas, 0, titleHeight);
+
+            // Draw attribution
+            ctx.fillStyle = '#999999';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('roofline.cc', exportCanvas.width - 10, exportCanvas.height - 10);
+
+            const link = document.createElement('a');
+            link.download = filename + '.png';
+            link.href = exportCanvas.toDataURL('image/png');
+            link.click();
         }
 
         function isMLA(config) {
@@ -530,9 +661,10 @@
             modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
 
             renderBarChart(modelData, dtype);
-            renderScatterChart(modelData, dtype);
+            renderScatterChart(modelData, dtype, 'active', 'scatterChartActive');
+            renderScatterChart(modelData, dtype, 'total', 'scatterChartTotal');
             renderLineChart(modelData, dtype);
-            renderRequestsChart(modelData, dtype);
+            renderBatchChart(modelData, dtype);
             renderTable(modelData);
         }
 
@@ -583,15 +715,14 @@
             });
         }
 
-        function renderScatterChart(modelData, dtype) {
-            const ctx = document.getElementById('scatterChart').getContext('2d');
-            const paramType = document.getElementById('param-type').value;
-            
+        function renderScatterChart(modelData, dtype, paramType, canvasId) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
             // Filter to models that have size data
-            const modelsWithSize = modelData.filter(m => 
+            const modelsWithSize = modelData.filter(m =>
                 m.config.total_params_b !== undefined && m.config.active_params_b !== undefined
             );
-            
+
             const data = modelsWithSize.map(m => {
                 const params = paramType === 'total' ? m.config.total_params_b : m.config.active_params_b;
                 const bytesPerToken = dtype === 'fp8' ? m.result.fp8 : m.result.bf16;
@@ -603,8 +734,11 @@
                 };
             });
 
-            if (scatterChart) scatterChart.destroy();
-            scatterChart = new Chart(ctx, {
+            // Destroy existing chart
+            if (paramType === 'active' && scatterChartActive) scatterChartActive.destroy();
+            if (paramType === 'total' && scatterChartTotal) scatterChartTotal.destroy();
+
+            const chart = new Chart(ctx, {
                 type: 'scatter',
                 data: {
                     datasets: [{
@@ -621,6 +755,9 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { top: 30 }
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -727,11 +864,14 @@
                             ctx.textAlign = 'center';
                             ctx.fillText(label.name, label.x, label.y);
                         });
-                        
+
                         ctx.restore();
                     }
                 }]
             });
+
+            if (paramType === 'active') scatterChartActive = chart;
+            else scatterChartTotal = chart;
         }
 
         function renderLineChart(modelData, dtype) {
@@ -804,41 +944,55 @@
             });
         }
 
-        function getSliderValues() {
-            const gpuMemoryGB = parseInt(document.getElementById('gpu-memory').value);
-            const seqLengthExp = parseFloat(document.getElementById('seq-length').value);
-            const seqLength = Math.round(Math.pow(2, seqLengthExp));
-            return { gpuMemoryGB, seqLength };
+        function getBatchSliderValues() {
+            const gpuMemoryGB = parseInt(document.getElementById('batch-gpu-memory').value);
+            const numGpus = parseInt(document.getElementById('num-gpus').value);
+            const weightDtype = document.getElementById('weight-dtype').value;
+            return { gpuMemoryGB, numGpus, weightDtype };
         }
 
-        function updateSliderLabels() {
-            const { gpuMemoryGB, seqLength } = getSliderValues();
-            document.getElementById('gpu-memory-value').textContent = gpuMemoryGB + ' GB';
-            document.getElementById('seq-length-value').textContent = (seqLength / 1024) + 'K';
+        function updateBatchSliderLabels() {
+            const { gpuMemoryGB } = getBatchSliderValues();
+            document.getElementById('batch-gpu-memory-value').textContent = gpuMemoryGB + ' GB';
         }
 
-        function renderRequestsChart(modelData, dtype) {
-            const ctx = document.getElementById('requestsChart').getContext('2d');
-            const { gpuMemoryGB, seqLength } = getSliderValues();
-            const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024;
+        function setGpuMemory(gb) {
+            document.getElementById('batch-gpu-memory').value = gb;
+            updateBatchSliderLabels();
+            render();
+        }
 
-            const requestCounts = modelData.map(m => {
-                const kvPerRequest = getKVCacheAtSeqLen(m.result, seqLength, dtype);
-                return Math.floor(gpuMemoryBytes / kvPerRequest);
+        function renderBatchChart(modelData, kvDtype) {
+            const ctx = document.getElementById('batchChart').getContext('2d');
+            const { gpuMemoryGB, numGpus, weightDtype } = getBatchSliderValues();
+            const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024 * 0.9; // 90% usable
+            const weightBytesPerParam = WEIGHT_BYTES[weightDtype];
+
+            // Filter to models with parameter count
+            const modelsWithParams = modelData.filter(m => m.config.total_params_b !== undefined);
+
+            // Calculate max tokens in flight for each model
+            const modelTokens = modelsWithParams.map(m => {
+                const totalWeightBytes = m.config.total_params_b * 1e9 * weightBytesPerParam;
+                const weightBytesPerGpu = totalWeightBytes / numGpus;
+                const availableForKV = Math.max(0, gpuMemoryBytes - weightBytesPerGpu);
+                const kvPerToken = kvDtype === 'fp8' ? m.result.fp8 : m.result.bf16;
+                const maxTokens = availableForKV > 0 ? Math.floor(availableForKV / kvPerToken) : 0;
+                return { ...m, maxTokens, weightBytesPerGpu, availableForKV };
             });
 
-            // Sort by request count descending for this chart
-            const sorted = modelData.map((m, i) => ({ ...m, requests: requestCounts[i] }))
-                .sort((a, b) => b.requests - a.requests);
+            // Sort by max tokens descending
+            modelTokens.sort((a, b) => b.maxTokens - a.maxTokens);
 
-            if (requestsChart) requestsChart.destroy();
-            requestsChart = new Chart(ctx, {
+            if (batchChart) batchChart.destroy();
+            batchChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: sorted.map(m => m.name),
+                    labels: modelTokens.map(m => m.name),
                     datasets: [{
-                        data: sorted.map(m => m.requests),
-                        backgroundColor: sorted.map(m => {
+                        data: modelTokens.map(m => m.maxTokens),
+                        backgroundColor: modelTokens.map(m => {
+                            if (m.maxTokens === 0) return '#dc2626';
                             if (m.result.useMLA) return '#c084fc';
                             if (m.result.slidingWindow) return '#fbbf24';
                             return '#4ade80';
@@ -853,19 +1007,34 @@
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                title: function(items) {
-                                    return items[0]?.label || '';
-                                },
                                 label: function(context) {
-                                    const m = sorted[context.dataIndex];
-                                    const kvSize = getKVCacheAtSeqLen(m.result, seqLength, dtype);
-                                    return `${context.raw.toLocaleString()} requests (${formatBytes(kvSize)}/req)`;
+                                    const m = modelTokens[context.dataIndex];
+                                    const weightGB = (m.weightBytesPerGpu / (1024**3)).toFixed(1);
+                                    const availGB = (m.availableForKV / (1024**3)).toFixed(1);
+                                    if (m.maxTokens === 0) {
+                                        return `Weights (${weightGB}GB) exceed GPU capacity`;
+                                    }
+                                    return [
+                                        `${m.maxTokens.toLocaleString()} tokens (batch × seq_len)`,
+                                        `Weights: ${weightGB}GB/GPU, KV headroom: ${availGB}GB`
+                                    ];
                                 }
                             }
                         }
                     },
                     scales: {
-                        x: { title: { display: true, text: 'Max Concurrent Requests' } },
+                        x: {
+                            type: 'logarithmic',
+                            title: { display: true, text: 'Max Tokens in Flight (batch × seq_len)' },
+                            min: 500000,
+                            ticks: {
+                                callback: function(v) {
+                                    if (v >= 1e6) return (v / 1e6).toFixed(0) + 'M';
+                                    if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+                                    return v;
+                                }
+                            }
+                        },
                         y: { ticks: { font: { size: 10 } } }
                     }
                 }
@@ -954,12 +1123,12 @@
         document.getElementById('add-btn').addEventListener('click', addModel);
         document.getElementById('model-path').addEventListener('keypress', e => { if (e.key === 'Enter') addModel(); });
         document.getElementById('dtype').addEventListener('change', render);
-        document.getElementById('param-type').addEventListener('change', render);
-        document.getElementById('gpu-memory').addEventListener('input', () => { updateSliderLabels(); render(); });
-        document.getElementById('seq-length').addEventListener('input', () => { updateSliderLabels(); render(); });
+        document.getElementById('batch-gpu-memory').addEventListener('input', () => { updateBatchSliderLabels(); render(); });
+        document.getElementById('num-gpus').addEventListener('change', render);
+        document.getElementById('weight-dtype').addEventListener('change', render);
 
         initModels();
-        updateSliderLabels();
+        updateBatchSliderLabels();
         render();
     </script>
 </body>
