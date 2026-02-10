@@ -126,7 +126,7 @@ WRAPPER
 
     # Replace POSTS_LIST placeholder in dist/index.html
     if [ -n "$post_links" ]; then
-        replacement="<div class=\"card\"><h2>Posts</h2><ul style=\"list-style: none; padding: 0;\">$(echo "$post_links" | sed 's/&/\\&/g')</ul></div>"
+        replacement="<div class=\"card\"><h2>Roofline Calculations</h2><ul style=\"list-style: none; padding: 0;\">$(echo "$post_links" | sed 's/&/\\&/g')</ul></div>"
         sed -i '' "s|<!-- POSTS_LIST -->|${replacement}|" "$DIST/index.html"
     else
         sed -i '' 's|<!-- POSTS_LIST -->||' "$DIST/index.html"
