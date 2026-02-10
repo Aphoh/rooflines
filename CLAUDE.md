@@ -47,17 +47,23 @@ rooflines/
 `build.sh` does the following:
 1. Cleans and creates `dist/` and `dist/posts/`
 2. Copies `index.html` to `dist/index.html`
-3. For each `posts/*.typ` file: compiles with `typst compile --features html --format html`, wraps output with site chrome (nav, styles)
+3. For each `posts/*.typ` file:
+   - Creates two temp typst wrappers in `posts/` that `#include` the original with different page widths
+   - Compiles to SVG at two widths: desktop (500pt, 40pt margins) and mobile (350pt, 20pt margins), both with `height: auto`
+   - Embeds both SVGs inline in an HTML wrapper with CSS media queries — desktop shown above 600px, mobile at 600px and below
 4. Generates HTML post links and replaces `<!-- POSTS_LIST -->` in `dist/index.html`
 5. Runs `git add dist/` to stage built files
+
+Posts are rendered as SVG (not typst HTML export) so that math and all typst features work correctly. The dual-width approach handles responsive layout: each width gets its own SVG with appropriate text reflow, and CSS swaps between them.
 
 A prek pre-commit hook runs `build.sh` automatically when `.html` or `.typ` files change.
 
 ## Adding a Blog Post
 
-1. Create `posts/my-post.typ` with a `= Title` heading
+1. Create `posts/my-post.typ` with a `= Title` heading (the first `= ` heading becomes the page title)
 2. Run `bash build.sh` (or just commit — the pre-commit hook will run it)
 3. The post appears at `dist/posts/my-post.html` and is linked from the index
+4. Write standard typst — math, figures, etc. all work since output is SVG
 
 ## Architecture
 
@@ -82,7 +88,7 @@ The calculator is a self-contained single-file web application (`index.html`) wi
 - `calculateKVCache(config)` - Core calculation returning bytes/token for bf16/fp8
 - `getKVCacheAtSeqLen(result, seqLen, dtype)` - Memory at specific sequence length (handles SWA bounding)
 - Four Chart.js visualizations: bar chart, scatter plot (size vs KV), line chart (seq length scaling), requests chart
-- Custom models stored in localStorage
+- Models are defined in `BUILTIN_MODELS` (no custom model UI)
 
 ### Test Files
 
