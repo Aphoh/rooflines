@@ -267,6 +267,282 @@ $B^*$---by that point you are approaching the compute-bound regime anyway.
   $B^* approx #bstar$.]
 }
 
+== Compute-bound regime
+
+The derivation above assumes *memory-bound* projections. But at high batch
+sizes, projection compute dominates. Let's derive the complete time formulas
+and systematically analyze each case.
+
+=== Complete latency formulas
+
+*Notation:* $B$ is the *global batch size* (total sequences across all GPUs).
+- DP: each GPU processes $B slash P$ sequences (batch sharded)
+- TP: each GPU processes all $B$ sequences cooperatively (head sharded)
+
+For $B$ sequences with $Q$ query tokens each:
+- Projection weights: $W = 2 b H (H + D_k)$ bytes
+- Total FLOPs: $4 B Q H (H + D_k)$
+- Per-GPU FLOPs (both approaches): $4 B Q H (H + D_k) slash P$
+- Peak compute per GPU: $C$ FLOPs/s
+
+*Per-GPU latency:*
+
+#align(center)[
+  #block(
+    fill: luma(235),
+    inset: 12pt,
+    radius: 4pt,
+  )[
+    $ T_"DP" &= max(underbrace(W / M, "load"), underbrace((4 B Q H (H + D_k)) / (P C), "compute")) \
+      T_"TP" &= max(underbrace(W / (P M), "load"), underbrace((4 B Q H (H + D_k)) / (P C), "compute")) + underbrace((2 b B Q H) / R, "AllReduce") $
+  ]
+]
+
+*DP:* Each GPU loads all $W$ weights and computes on $B slash P$ sequences
+($4 (B slash P) Q H (H + D_k)$ FLOPs per GPU).
+
+*TP:* Each GPU loads $W slash P$ weights (sharded) and computes on all $B$
+sequences but only $n_k slash P$ heads ($4 B Q H (H + D_k) slash P$ FLOPs per GPU).
+
+Both have identical per-GPU compute. The AllReduce communicates the full $B Q H$
+output (all GPUs cooperate on all sequences).
+
+=== Case analysis
+
+The two $max()$ expressions create four potential cases:
+
+#table(
+  columns: (auto, auto, auto),
+  inset: 8pt,
+  stroke: 0.5pt,
+  table.header([*Case*], [*DP regime*], [*TP regime*]),
+  [1], [memory-bound], [memory-bound],
+  [2], [memory-bound], [compute-bound],
+  [3], [compute-bound], [compute-bound],
+  [4], [compute-bound], [memory-bound],
+)
+
+*Case 4 is impossible:* TP reads fewer weights ($W slash P < W$), so if DP
+is compute-bound (load hidden), TP must also be compute-bound.
+
+==== Case 1: Both memory-bound
+
+When both $W slash M$ and $W slash (P M)$ dominate:
+
+$ T_"DP" &= W / M \
+  T_"TP" &= W / (P M) + (2 b B Q H) / R $
+
+This is the regime analyzed earlier. Setting $T_"TP" = T_"DP"$:
+
+$ W / (P M) + (2 b B Q H) / R = W / M $
+
+Solving for $B Q$:
+
+$ B Q^* = (W (P - 1) R) / (2 b H P M) = ((H + D_k)(P - 1) R) / (P M) $
+
+*However:* This crossover is only valid when $B Q < B Q_"cb,TP"$ (TP still
+memory-bound). For typical hardware, $B Q^*$ exceeds $B Q_"cb,TP"$, so this
+crossover *never happens*. TP becomes compute-bound before reaching the
+memory-bound crossover point.
+
+==== Case 2: DP memory-bound, TP compute-bound
+
+When DP is memory-bound but TP has become compute-bound ($B Q > B Q_"cb,TP"$):
+
+$ T_"DP" &= W / M \
+  T_"TP" &= (4 B Q H (H + D_k)) / (P C) + (2 b B Q H) / R $
+
+*This is where the actual crossover happens* in practice. Both compute and
+AllReduce terms grow linearly with $B Q$. Setting $T_"TP" = T_"DP"$:
+
+$ (4 B Q H (H + D_k)) / (P C) + (2 b B Q H) / R = W / M $
+
+Factor out $B Q H$ and solve:
+
+$ B Q^* = (W P C R) / (M (4 H (H + D_k) R + 2 b H P C)) $
+
+Substitute $W = 2 b H (H + D_k)$ and simplify:
+
+$ B Q^* = (C P R b (H + D_k)) / (M (C P b + 2 R (H + D_k))) $
+
+Rewrite with each constant in minimal factors (divide by $P C b$):
+
+$ B Q^* = 1 / (underbrace(M / (R (H + D_k)), "communication") + underbrace(2 M / (P C b), "compute")) $
+
+This is the *harmonic mean* of two bottlenecks! The denominator is
+$2 slash "HM"$ where $"HM" = "harmonic mean"(R (H + D_k), P C b slash 2)$:
+
+#align(center)[
+  #block(
+    fill: luma(235),
+    inset: 12pt,
+    radius: 4pt,
+  )[
+    $ B Q^* = 1 / (2 M) times "harmonic mean"(underbrace(R (H + D_k), "communication"), underbrace(P C b slash 2, "compute")) $
+  ]
+]
+
+The crossover batch size is inversely proportional to memory bandwidth $M$ and
+proportional to the harmonic mean of:
+- *Communication bandwidth* $times$ *model dimension*: $R (H + D_k)$
+- *Compute capacity*: $P C b slash 2$
+
+The harmonic mean naturally balances these two bottlenecks. As $P$ increases,
+the compute term grows and $B Q^*$ grows.
+
+Valid when $B Q_"cb,TP" < B Q < B Q_"cb,DP"$. For typical models/hardware,
+the crossover falls in this regime.
+
+==== Case 3: Both compute-bound
+
+When both approaches hide weight loads behind compute ($B Q > B_"cb,DP" Q$):
+
+$ T_"DP" &= (4 B Q H (H + D_k)) / (P C) \
+  T_"TP" &= (4 B Q H (H + D_k)) / (P C) + (2 b B Q H) / R $
+
+*DP always wins* in this regime---identical compute, but TP pays AllReduce cost.
+
+=== Compute-bound thresholds
+
+TP becomes compute-bound when load time equals compute time:
+
+$ W / (P M) = (4 B Q_"cb,TP" H (H + D_k)) / (P C) $
+
+$ B Q_"cb,TP" = (W C) / (4 H (H + D_k) M) = (b C) / (2 M) $
+
+Similarly for DP:
+
+$ B Q_"cb,DP" = (W C P) / (4 H (H + D_k) M) = (b C P) / (2 M) = P dot B Q_"cb,TP" $
+
+Note that $B Q_"cb,TP"$ is *hardware-dependent only* (independent of model
+architecture). This is why all models have the same compute-bound threshold on
+given hardware.
+
+=== Example: GLM-4.5 decode on GB200
+
+#{
+  let P = 8
+  let M = 8.0  // TB/s
+  let R = 1.8  // TB/s
+  let C = 4000.0  // TFLOPS
+  let b_bytes = 2  // bf16
+  let nq = 96
+  let nk = 8
+  let d = 128
+  let H = nq * d
+  let D_k = nk * d
+  let dim = d * (nq + nk)
+  let W_bytes = 2 * b_bytes * H * (H + D_k)
+  let Q = 1  // decode
+
+  // Convert everything to microseconds for the plot
+  let M_us = M * 1e12 / 1e6  // TB/s -> B/us
+  let R_us = R * 1e12 / 1e6
+  let C_us = C * 1e12 / 1e6  // TFLOPS -> FLOP/us
+
+  let t_dp(BQ) = {
+    let load = W_bytes / M_us
+    let compute = 4 * BQ * H * (H + D_k) / (P * C_us)
+    calc.max(load, compute)
+  }
+
+  let t_tp(BQ) = {
+    let load = W_bytes / (P * M_us)
+    let compute = 4 * BQ * H * (H + D_k) / (P * C_us)
+    let ar = 2 * b_bytes * BQ * H / R_us
+    calc.max(load, compute) + ar
+  }
+
+  // Compute key thresholds
+  let BQ_cb_tp = calc.round(b_bytes * C * 1e12 / (2 * M * 1e12))
+  let BQ_cb_dp = calc.round(b_bytes * C * P * 1e12 / (2 * M * 1e12))
+  let BQ_star_mem = calc.round(dim * (P - 1) * R / (P * M))
+
+  [GLM-4.5 ($n_q = #nq$, $n_k = #nk$, $d = #d$) on $P = #P$ GB200s, decode ($Q = #Q$).]
+
+  [*Thresholds:*]
+  [- $B Q_"cb,TP" = #BQ_cb_tp$ (TP becomes compute-bound)]
+  [- $B Q^*_"mem" = #BQ_star_mem$ (memory-bound crossover, *never reached*)]
+  [- $B Q_"cb,DP" = #BQ_cb_dp$ (DP becomes compute-bound)]
+
+  [Since $B Q_"cb,TP" < B Q^*_"mem"$, TP becomes compute-bound before the
+  memory-bound crossover. The actual crossover occurs in Case 2 (mixed regime).]
+
+  canvas({
+    import draw: *
+
+    set-style(
+      axes: (stroke: .5pt, tick: (stroke: .5pt)),
+      legend: (stroke: none, orientation: ttb, item: (spacing: .3), scale: 80%),
+    )
+
+    plot.plot(
+      size: (12, 7),
+      x-label: [Total query tokens $B Q$ (decode: $Q = 1$)],
+      y-label: [Latency per layer (μs)],
+      x-tick-step: 1000,
+      y-tick-step: 20,
+      x-min: 0, x-max: 6000,
+      y-min: 0, y-max: 120,
+      legend: "inner-north-west",
+      {
+        // Sample points for the plot (BQ from 0 to 6000)
+        let samples = range(0, 6001, step: 100)
+        let dp_points = samples.map(BQ => (BQ, t_dp(BQ)))
+        let tp_points = samples.map(BQ => (BQ, t_tp(BQ)))
+
+        plot.add(
+          dp_points,
+          style: (stroke: (paint: blue, thickness: 1.5pt)),
+          label: [DP],
+        )
+        plot.add(
+          tp_points,
+          style: (stroke: (paint: red, thickness: 1.5pt)),
+          label: [TP],
+        )
+
+        // Mark the crossover point (find it numerically)
+        let crossover = none
+        for i in range(1, samples.len()) {
+          let BQ_prev = samples.at(i - 1)
+          let BQ_curr = samples.at(i)
+          if t_tp(BQ_prev) < t_dp(BQ_prev) and t_tp(BQ_curr) >= t_dp(BQ_curr) {
+            crossover = BQ_curr
+            break
+          }
+        }
+
+        if crossover != none {
+          // Draw vertical line at crossover
+          plot.add(
+            ((crossover, 0), (crossover, 120)),
+            style: (stroke: (paint: gray, thickness: 0.5pt, dash: "dashed")),
+          )
+        }
+
+        // Mark BQ_cb,TP threshold
+        plot.add(
+          ((BQ_cb_tp, 0), (BQ_cb_tp, 120)),
+          style: (stroke: (paint: red, thickness: 0.5pt, dash: "dotted")),
+        )
+
+        // Mark BQ_cb,DP threshold
+        plot.add(
+          ((BQ_cb_dp, 0), (BQ_cb_dp, 120)),
+          style: (stroke: (paint: blue, thickness: 0.5pt, dash: "dotted")),
+        )
+      },
+    )
+  })
+
+  [The plot shows:]
+  [- TP (red) starts lower due to $W slash P$ vs $W$]
+  [- At $B Q = #BQ_cb_tp$ (red dotted), TP becomes compute-bound and curve steepens]
+  [- DP (blue) stays flat (memory-bound) until $B Q = #BQ_cb_dp$ (blue dotted)]
+  [- Crossover (gray dashed) occurs in Case 2, where TP is compute-bound but DP is memory-bound]
+}
+
 The breakeven scales linearly with realised AllReduce bandwidth. As your
 collective becomes more efficient, DP needs a larger batch to win:
 
@@ -400,9 +676,7 @@ For prefill, even at context length 1K, the breakeven is about 2.6 requests.
 At 4K context, a single request exceeds $B^*$.
 In either regime, *DP attention dominates* once $Q$ is appreciable.
 
-*Caveat:* when prefill is compute-bound, DP attention is always optimal —
-weight loads are hidden behind computation, so TP's sharding buys nothing.
-However, DP requires that work is evenly
-distributed across ranks. When prefill batches are imbalanced or some ranks
-have no requests, TP is preferable: it automatically balances all workers
-on every request since they cooperate on the same tokens.
+*Caveat:* The analysis above assumes memory-bound attention. At high batch
+sizes, both approaches become compute-bound. See § Compute-bound regime for
+complete latency formulas with $max("load", "compute")$. However, DP requires
+evenly distributed work; when batches are imbalanced, TP is preferable.
