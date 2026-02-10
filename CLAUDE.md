@@ -4,15 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KV Cache Calculator - a single-page web tool that compares KV cache memory requirements across LLM models. Deployed to GitHub Pages.
+KV Cache Calculator - a web tool that compares KV cache memory requirements across LLM models. Deployed to GitHub Pages from `dist/`. Also supports blog posts written in Typst.
 
 ## Commands
 
 **Run locally:**
 ```bash
-open index.html
+open dist/index.html
 # Or with a server:
-python3 -m http.server 8080
+cd dist && python3 -m http.server 8080
+```
+
+**Build:**
+```bash
+bash build.sh    # Compiles posts, assembles dist/
 ```
 
 **Run tests:**
@@ -21,9 +26,42 @@ python3 test.py    # Python test suite with verification
 node test.js       # Node.js test suite
 ```
 
+## Directory Structure
+
+```
+rooflines/
+├── index.html                # Source calculator page (has <!-- POSTS_LIST --> placeholder)
+├── posts/                    # Typst source files for blog posts
+│   └── .gitkeep
+├── build.sh                  # Build script: compiles posts, assembles dist/
+├── .pre-commit-config.yaml   # prek config (runs build on commit)
+├── dist/                     # Built output (committed, deployed to GitHub Pages)
+│   ├── index.html            # Calculator with post links injected
+│   └── posts/                # Compiled typst HTML wrapped with site chrome
+├── test.py, test.js
+└── .github/workflows/pages.yml
+```
+
+## Build Process
+
+`build.sh` does the following:
+1. Cleans and creates `dist/` and `dist/posts/`
+2. Copies `index.html` to `dist/index.html`
+3. For each `posts/*.typ` file: compiles with `typst compile --features html --format html`, wraps output with site chrome (nav, styles)
+4. Generates HTML post links and replaces `<!-- POSTS_LIST -->` in `dist/index.html`
+5. Runs `git add dist/` to stage built files
+
+A prek pre-commit hook runs `build.sh` automatically when `.html` or `.typ` files change.
+
+## Adding a Blog Post
+
+1. Create `posts/my-post.typ` with a `= Title` heading
+2. Run `bash build.sh` (or just commit — the pre-commit hook will run it)
+3. The post appears at `dist/posts/my-post.html` and is linked from the index
+
 ## Architecture
 
-This is a self-contained single-file web application (`index.html`) with no build system. All JavaScript logic is embedded in the HTML file.
+The calculator is a self-contained single-file web application (`index.html`) with all JavaScript embedded. `dist/` is the deployable output.
 
 ### Key Concepts
 
