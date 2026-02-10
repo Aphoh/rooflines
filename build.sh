@@ -61,7 +61,7 @@ build_once() {
 #include "${basename}.typ"
 TYP
         cat > "$mobile_wrapper" <<TYP
-#set page(width: 350pt, height: auto, margin: 20pt)
+#set page(width: 250pt, height: auto, margin: 0pt)
 #include "${basename}.typ"
 TYP
 

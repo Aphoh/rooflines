@@ -203,9 +203,10 @@ at batch $B^*$, given each GPU's memory, FP8 weights, and FP8 KV cache:
     ("Llama-3.1-70B",  64, 8,  128, 80,  70),
     ("GLM-4.5",        96, 8,  128, 92,  358),
   )
+  set text(size: 0.7em)
   table(
     columns: (auto, auto, ..hw.map(_ => (auto, auto)).flatten()),
-    inset: 6pt,
+    inset: 4pt,
     stroke: 0.5pt,
     table.header(
       [*Model*], [$d(n_q + n_k)$],
@@ -369,16 +370,16 @@ sequence, the batch-size breakeven shrinks by a factor of $Q$.
 
   table(
     columns: (auto, auto, auto, auto),
-    inset: 8pt,
+    inset: 4pt,
     stroke: 0.5pt,
     table.header([*Scenario*], [$Q$], [$B^*$], [*DP wins at batch...*]),
     ..(
-      ([Decode], 1),
-      ([Spec-dec ($n_"draft" = 4$)], 5),
-      ([Spec-dec ($n_"draft" = 16$)], 17),
-      ([Prefill 1K], 1024),
-      ([Prefill 4K], 4096),
-      ([Prefill 32K], 32768),
+      ([#text(size: 0.7em)[Decode]], 1),
+      ([#text(size: 0.7em)[Spec-dec ($n_"draft" = 4$)]], 5),
+      ([#text(size: 0.7em)[Spec-dec ($n_"draft" = 16$)]], 17),
+      ([#text(size: 0.7em)[Prefill 1K]], 1024),
+      ([#text(size: 0.7em)[Prefill 4K]], 4096),
+      ([#text(size: 0.7em)[Prefill 32K]], 32768),
     ).map(((label, q)) => {
       let bp = calc.round(bstar_decode / q, digits: 1)
       (
@@ -398,3 +399,10 @@ At $n_"draft" = 16$, the breakeven drops to $tilde 154$.
 For prefill, even at context length 1K, the breakeven is about 2.6 requests.
 At 4K context, a single request exceeds $B^*$.
 In either regime, *DP attention dominates* once $Q$ is appreciable.
+
+*Caveat:* when prefill is compute-bound, DP attention is always optimal —
+weight loads are hidden behind computation, so TP's sharding buys nothing.
+However, DP requires that work is evenly
+distributed across ranks. When prefill batches are imbalanced or some ranks
+have no requests, TP is preferable: it automatically balances all workers
+on every request since they cooperate on the same tokens.
