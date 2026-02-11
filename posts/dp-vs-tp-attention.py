@@ -1,15 +1,15 @@
 """Symbolic verification and numerical tables for dp-vs-tp-attention.typ"""
 from sympy import *
 
-H, D_k, P, B, Q, b, M, R, C = symbols('H D_k P B Q b M R C', positive=True)
+H, D_k, P, B, Q, M, R, C = symbols('H D_k P B Q M R C', positive=True)
 
 # Use BQ as total query tokens for cleaner notation
 BQ = symbols('BQ', positive=True)
 
 # --- Symbolic verification ---
 
-# Attention weight bytes (Q + K + V + O)
-W = 2 * b * H * (H + D_k)
+# Attention weight bytes (Q + K + V + O) - FP8, 1 byte per element
+W = 2 * H * (H + D_k)
 
 # Load times
 T_load_DP = W / M
@@ -18,8 +18,8 @@ T_load_TP = W / (P * M)
 # Compute time (using BQ for total query tokens)
 T_compute = 4 * BQ * H * (H + D_k) / (P * C)
 
-# AllReduce time
-T_ar = 2 * b * BQ * H / R
+# AllReduce time (FP8)
+T_ar = 2 * BQ * H / R
 
 # Complete formulas
 T_DP_complete = Max(T_load_DP, T_compute)
@@ -61,7 +61,7 @@ BQ_star_case2 = solve(Eq(T_TP_case2, T_DP_case2), BQ)[0]
 print("BQ* (with W) =", simplify(BQ_star_case2))
 
 # Substitute W = 2bH(H+D_k) and simplify
-BQ_star_case2_sub = BQ_star_case2.subs(W, 2*b*H*(H + D_k))
+BQ_star_case2_sub = BQ_star_case2.subs(W, 2*H*(H + D_k))
 BQ_star_case2_simplified = simplify(BQ_star_case2_sub)
 print("BQ* (expanded) =", BQ_star_case2_simplified)
 
@@ -70,41 +70,41 @@ BQ_star_case2_factored = cancel(BQ_star_case2_sub)
 print("BQ* (factored) =", BQ_star_case2_factored)
 
 # Factor out (D_k + H) from denominator: CPb + 2(D_k+H)R
-BQ_star_case2_manual = C*P*R*b*(D_k + H) / (M*(C*P*b + 2*(D_k + H)*R))
+BQ_star_case2_manual = C*P*R*(D_k + H) / (M*(C*P + 2*(D_k + H)*R))
 print("BQ* (cleanest) =", simplify(BQ_star_case2_manual))
 
 # Try to separate into model × hardware × parallelism
 print("\nFactorization attempts:")
 
 # Factor 1: Pull out (H+D_k) and P from numerator
-print("1. (H+D_k) × P × [CRb / (M(CPb + 2R(H+D_k)))]")
+print("1. (H+D_k) × P × [CR / (M(CPb + 2R(H+D_k)))]")
 
 # Factor 2: Note that denominator mixes everything
 # Try dividing by P to see per-rank batch
-BQ_per_rank = C*R*b*(D_k + H) / (M*(C*P*b + 2*(D_k + H)*R))
+BQ_per_rank = C*R*(D_k + H) / (M*(C*P + 2*(D_k + H)*R))
 print("2. BQ*/P (per-rank) =", simplify(BQ_per_rank))
 
 # Factor 3: Get (H+D_k) to appear only once
 # Multiply num and denom by P/(H+D_k)
-BQ_star_single_model = C*R*b*P / (M*(C*b*P/(D_k + H) + 2*R))
+BQ_star_single_model = C*R*P / (M*(C*P/(D_k + H) + 2*R))
 print("3. Factor to isolate (H+D_k):")
-print("   BQ* = PCRb / (M(PCb/(H+D_k) + 2R))")
+print("   BQ* = PCR / (M(PC/(H+D_k) + 2R))")
 print("   Simplified:", simplify(BQ_star_single_model))
 
 # Verify this equals the original
-BQ_star_original = C*P*R*b*(D_k + H) / (M*(C*P*b + 2*R*(D_k + H)))
+BQ_star_original = C*P*R*(D_k + H) / (M*(C*P + 2*R*(D_k + H)))
 difference = simplify(BQ_star_single_model - BQ_star_original)
 print("   Verification (should be 0):", difference)
 
 print("\n   This separates:")
 print("   - Model: (H+D_k)^(-1) in denominator only")
-print("   - Hardware: C, R, M, b")
+print("   - Hardware: C, R, M (FP8)")
 print("   - Parallelism: P")
 
 # Factor 4: Also get R to appear only once (divide by R)
-BQ_star_single_R = P*C*b / (M*(P*C*b/(R*(D_k + H)) + 2))
+BQ_star_single_R = P*C / (M*(P*C/(R*(D_k + H)) + 2))
 print("\n4. Also isolate R (divide by R):")
-print("   BQ* = PCb / (M(PCb/(R(H+D_k)) + 2))")
+print("   BQ* = PC / (M(PC/(R(H+D_k)) + 2))")
 print("   Simplified:", simplify(BQ_star_single_R))
 difference_R = simplify(BQ_star_single_R - BQ_star_original)
 print("   Verification (should be 0):", difference_R)
@@ -112,13 +112,13 @@ print("   Verification (should be 0):", difference_R)
 print("\n   Now each hardware constant appears once:")
 print("   - (H+D_k): denominator only")
 print("   - R: denominator only")
-print("   - C, M, b: appear in multiple places")
+print("   - C, M: appear in multiple places")
 print("   - P: numerator and denominator")
 
-# Factor 5: Divide by PCb to minimize where each constant appears
-BQ_star_minimal = 1 / (M/(R*(D_k + H)) + 2*M/(P*C*b))
-print("\n5. Divide by PCb to minimize factor occurrences:")
-print("   BQ* = 1 / (M/(R(H+D_k)) + 2M/(PCb))")
+# Factor 5: Divide by PC to minimize where each constant appears
+BQ_star_minimal = 1 / (M/(R*(D_k + H)) + 2*M/(P*C))
+print("\n5. Divide by PC to minimize factor occurrences:")
+print("   BQ* = 1 / (M/(R(H+D_k)) + 2M/(PC))")
 print("   Simplified:", simplify(BQ_star_minimal))
 difference_minimal = simplify(BQ_star_minimal - BQ_star_original)
 print("   Verification (should be 0):", difference_minimal)
@@ -129,26 +129,35 @@ print("   - R: 1st denominator term only")
 print("   - M: coefficient of both denominator terms")
 print("   - P: 2nd denominator term only")
 print("   - C: 2nd denominator term only")
-print("   - b: 2nd denominator term only")
 
 # Factor 6: Recognize as harmonic mean!
 # HM(a,b) = 2ab/(a+b), and 1/HM = (1/a + 1/b)/2
-# Our expression: 1/(R(H+D_k)) + 2/(PCb) = 1/a + 1/b where a=R(H+D_k), b=PCb/2
-# So this is 2/HM where HM is harmonic mean of R(H+D_k) and PCb/2
+# Our expression: 1/(R(H+D_k)) + 2/(PC) = 1/a + 1/b where a=R(H+D_k), b=PC/2
+# So this is 2/HM where HM is harmonic mean of R(H+D_k) and PC/2
 a_term = R*(D_k + H)
-b_term = P*C*b/2
+b_term = P*C/2
 harmonic_mean = 2*a_term*b_term / (a_term + b_term)
 BQ_star_harmonic = harmonic_mean / (2*M)
 print("\n6. Recognize as harmonic mean:")
-print("   Let a = R(H+D_k), b = PCb/2")
+print("   Let a = R(H+D_k), b = PC/2")
 print("   HM(a,b) = 2ab/(a+b) =", simplify(harmonic_mean))
 print("   BQ* = HM/(2M) =", simplify(BQ_star_harmonic))
 difference_harmonic = simplify(BQ_star_harmonic - BQ_star_original)
 print("   Verification (should be 0):", difference_harmonic)
-print("\n   Interpretation: BQ* = (1/(2M)) × harmonic_mean(R(H+D_k), PCb/2)")
-print("   Crossover scales with harmonic mean of:")
-print("   - Communication: R(H+D_k) [AllReduce bandwidth × model dimension]")
-print("   - Compute: PCb/2 [parallelism × compute × precision / 2]")
+
+# Alternative form with bandwidth ratios
+a_alt = R*(H + D_k)/(2*M)
+b_alt = P*C/(4*M)
+harmonic_mean_alt = 2*a_alt*b_alt / (a_alt + b_alt)
+print("\n7. Alternative form (bandwidth ratios):")
+print("   Let a = R/(2M) × (H+D_k), b = P/4 × C/M")
+print("   BQ* = HM(a,b) =", simplify(harmonic_mean_alt))
+difference_alt = simplify(harmonic_mean_alt - BQ_star_original)
+print("   Verification (should be 0):", difference_alt)
+print("\n   Interpretation: BQ* = harmonic_mean(R/(2M)·(H+D_k), P/4·C/M)")
+print("   Separates hardware ratios from model/deployment:")
+print("   - R/(2M) × (H+D_k): AllReduce-to-memory ratio × model dimension")
+print("   - P/4 × C/M: deployment factor × compute-to-memory ratio")
 
 print("\nValid when: BQ_cb,TP < BQ < BQ_cb,DP")
 
@@ -163,8 +172,8 @@ print("DP always wins: T_TP - T_DP =", simplify(T_TP_case3 - T_DP_case3), "> 0")
 # --- Hardware constants ---
 
 hardware = {
-    "H100 SXM":  {"M": 3.35e12, "R": 900e9,  "gpu_gb": 80,  "C": 2000e12},  # 2000 TFLOPS FP8
-    "GB200":     {"M": 8.0e12,  "R": 1.8e12, "gpu_gb": 192, "C": 4000e12},  # 4000 TFLOPS FP8
+    "H100 SXM":  {"M": 3.35e12, "R": 900e9,  "gpu_gb": 80,  "C": 2250e12},  # 2.25 PFLOPS FP8
+    "GB200":     {"M": 8.0e12,  "R": 1.8e12, "gpu_gb": 192, "C": 5000e12},  # 5 PFLOPS FP8
 }
 
 print("\n--- Hardware constants ---")
@@ -184,8 +193,8 @@ T_compute = 4 * B * Q * H * (H + D_k) / (P * C)
 T_load_DP = W / M
 T_load_TP = W / (P * M)
 
-# AllReduce time (TP only)
-T_ar = 2 * b * B * Q * H / R
+# AllReduce time (TP only) - FP8
+T_ar = 2 * B * Q * H / R
 
 # Complete formulas
 T_DP = Max(T_load_DP, T_compute)
@@ -222,15 +231,65 @@ models = {
 P_val = 8
 p_factor = (P_val - 1) / P_val
 
-# Numerical verification: is BQ* > BQ_cb,TP?
-print("\n=== Verification: Is memory-bound crossover valid? ===")
-print("For each model, check if BQ* (memory-bound) > BQ_cb,TP")
-print("If BQ* > BQ_cb,TP: TP becomes compute-bound BEFORE memory-bound crossover")
-print()
+# Derive when Case 1 crossover is valid using sympy
+print("\n=== When does Case 1 crossover occur? ===")
+print("Case 1 (both memory-bound) crossover: BQ* = (H+D_k)(P-1)R/(PM)")
+print("TP becomes compute-bound at: BQ_cb,TP = bC/(2M)")
+
+# Define the expressions
+BQ_star_case1_expr = (H + D_k)*(P - 1)*R/(P*M)
+BQ_cb_TP_expr = C/(2*M)
+
+print("\nFor Case 1 crossover to happen, need: BQ*(Case 1) < BQ_cb,TP")
+print(f"  {BQ_star_case1_expr} < {BQ_cb_TP_expr}")
+
+# Solve for C
+C_min = solve(BQ_star_case1_expr < BQ_cb_TP_expr, C)
+print("\nSolving for C with sympy:")
+print(f"  C must satisfy: {C_min}")
+
+# Get the threshold value
+C_threshold_expr = solve(Eq(BQ_star_case1_expr, BQ_cb_TP_expr), C)[0]
+print(f"\nThreshold (when BQ* = BQ_cb,TP): C = {simplify(C_threshold_expr)}")
+
+# Verify the simplified form
+C_simplified = 2*(H + D_k)*(P - 1)*R/(P)
+print(f"Simplified: C = {simplify(C_simplified)}")
+print(f"Verification (should be 0): {simplify(C_threshold_expr - C_simplified)}")
+
+# Rearrange to separate model and hardware
+print("\n=== Rearrange to separate model and hardware ===")
+print("Starting from: C > 2R(H+D_k)(P-1)/(bP)")
+print("Divide both sides by 2R(P-1)/(bP):")
+
+# Rearrange: C > 2R(H+D_k)(P-1)/(bP)
+# => CbP/(2R(P-1)) > (H+D_k)
+# => (H+D_k) < C/(2R) × P/(P-1)
+
+model_side = H + D_k
+hardware_side = C/(2*R)
+deployment_factor = P/(P - 1)
+
+print(f"\n  Model side: {model_side}")
+print(f"  Hardware side: {hardware_side}")
+print(f"  Deployment factor: {deployment_factor}")
+
+combined = hardware_side * deployment_factor
+print(f"\n  (H+D_k) < {simplify(combined)}")
+print(f"  Verification: {simplify(combined - C*P/(2*R*(P-1)))}")
+
+print("\nCase 1 valid when:")
+print("  (H+D_k) < [C/(2R)] × [P/(P-1)]")
+print("           model    hardware   deployment")
+print("\nPhysical interpretation:")
+print("  Model dimension must be SMALL relative to compute/communication ratio C/(2R)")
+print("  For typical hardware with low C/R ratio, (H+D_k) is too large")
+print("\n=== Numerical verification for each model/hardware ===")
+
 
 for hw_name, hw in hardware.items():
-    print(f"\n{hw_name}:")
-    BQ_cb_TP_val = 2 * hw["C"] / (2 * hw["M"])  # Cb/(2M)
+    print(f"\n{hw_name} (C = {hw['C']/1e12:.0f} TFLOPS):")
+    BQ_cb_TP_val = 2 * hw["C"] / (2 * hw["M"])  # C/(2M), FP8
     print(f"  BQ_cb,TP = {BQ_cb_TP_val:.0f}")
 
     all_invalid = True
@@ -238,10 +297,14 @@ for hw_name, hw in hardware.items():
         dim = m["d"] * (m["n_q"] + m["n_k"])
         BQ_star_mem = dim * (P_val - 1) * hw["R"] / (P_val * hw["M"])  # (H+D_k)(P-1)R/(PM)
 
+        # Calculate minimum C needed for Case 1 to be valid
+        # C > 2(H+D_k)(P-1)R/(bP) where b=2
+        C_min_for_case1 = 2 * dim * (P_val - 1) * hw["R"] / (2 * P_val)
+
         if BQ_star_mem > BQ_cb_TP_val:
-            status = "✓ TP compute-bound before crossover"
+            status = f"✓ TP compute-bound first (need C > {C_min_for_case1/1e12:.0f} TFLOPS)"
         else:
-            status = "✗ Memory-bound crossover IS valid"
+            status = "✗ Case 1 valid!"
             all_invalid = False
 
         print(f"  {model_name:<18} BQ* = {BQ_star_mem:>6.0f}  {status}")
@@ -287,10 +350,10 @@ for name, m in models.items():
 
     print(f"{name:<18} {dim:>10}", end="")
     for hw_name, hw in hardware.items():
-        # Weight bytes (bf16, 2 bytes per element)
+        # Weight bytes (FP8, 2 bytes per element)
         W_val = 2 * 2 * H_val * (H_val + D_k_val)
 
-        # BQ_cb,TP = (W*C) / (4*H*(H+D_k)*M - 2*b*H*P*C/R)
+        # BQ_cb,TP = (W*C) / (4*H*(H+D_k)*M - 2*H*P*C/R)
         numerator_tp = W_val * hw["C"]
         denominator_tp = 4 * H_val * (H_val + D_k_val) * hw["M"] - 2 * 2 * H_val * P_val * hw["C"] / hw["R"]
         bq_cb_tp = numerator_tp / denominator_tp if denominator_tp > 0 else float('inf')
@@ -355,7 +418,7 @@ print("\n--- Timing table: Llama-3.1-70B, P=8 ---")
 m = models["Llama-3.1-70B"]
 dim = m["d"] * (m["n_q"] + m["n_k"])
 H_val = m["H"]
-b_val = 2  # bf16
+b_val = 2  # FP8
 
 for hw_name, hw in hardware.items():
     W_val = 2 * b_val * H_val * dim  # note: H_in * (n_q*d + n_k*d) when H != n_q*d
