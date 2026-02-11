@@ -9,24 +9,104 @@
     inset: 12pt,
     radius: 4pt,
   )[
-    *TL;DR* — DP vs TP crossover for GQA attention:
+    *TL;DR* — DP vs TP crossover for GQA attention (FP8):
 
     $ B Q^* = "harmonic mean"(R / (2 M) (H + D_k), P / 4 dot.c C / M) $
 
-    where $B Q$ is total query tokens, $M$ is HBM bandwidth, $R$ is AllReduce
-    bandwidth, $H$ is hidden dimension, $D_k$ is KV dimension, $P$ is parallelism
-    degree, and $C$ is compute (FLOPs/s). Assumes FP8 weights and KV cache.
-    The crossover is the harmonic mean of bandwidth ratios ($R slash M$, $C slash M$)
-    scaled by model and deployment parameters.
+    where $B$ is batch size, $Q$ is query tokens per sequence, $M$ is HBM bandwidth,
+    $R$ is AllReduce bandwidth, $H$ is hidden dimension, $D_k$ is KV dimension,
+    $P$ is parallelism degree, and $C$ is compute (FLOPs/s).
 
-    For decode ($Q = 1$), TP wins at low batch; DP wins at high batch.
-    For prefill ($Q = L$), DP wins at very low batch sizes. Speculative decoding
-    ($Q = 1 + n_"draft"$) cuts $B^*$ proportionally, making DP viable at lower batch.
-
-    Above $B Q = P C slash (2 M)$, DP is always optimal (both compute-bound; TP pays AllReduce).
-    For FP8: $C slash (2 M) approx #calc.round(2250 / (2 * 3.35))$ (Hopper), $approx #calc.round(5000 / (2 * 8.0))$ (Blackwell).
+    TP wins below $B Q^*$, DP wins above. Above $B Q = P C slash (2M)$, DP is always
+    optimal (both compute-bound). For decode ($Q = 1$), the plot shows batch crossover:
   ]
 ]
+
+#{
+  // Hardware specs
+  let M_h100 = 3.35    // TB/s
+  let R_h100 = 0.9     // TB/s
+  let C_h100 = 2250.0  // TFLOPS
+
+  let M_gb200 = 8.0    // TB/s
+  let R_gb200 = 1.8    // TB/s
+  let C_gb200 = 5000.0 // TFLOPS
+
+  // Calculate BQ* for a given (H+D_k), hardware, and P
+  let calc_bq_star(dim, M, R, C, P) = {
+    let a = R / (2 * M) * dim
+    let b = P / 4 * C / M
+    let hm = 2 * a * b / (a + b)
+    hm
+  }
+
+  canvas({
+    import draw: *
+
+    set-style(
+      axes: (stroke: .5pt, tick: (stroke: .5pt), grid: (stroke: (paint: gray, thickness: 0.3pt, dash: "dotted"))),
+      legend: (stroke: none, orientation: ttb, item: (spacing: .3), scale: 80%),
+    )
+
+    plot.plot(
+      size: (7, 6),
+      x-label: [$H + D_k$],
+      y-label: [$B^* slash P$],
+      x-tick-step: 3000,
+      y-tick-step: 100,
+      x-min: 3000, x-max: 18000,
+      y-min: 0, y-max: 500,
+      legend: "inner-north-west",
+      legend-style: (item: (spacing: 0.2), scale: 55%),
+      {
+        let dims = range(3000, 20001, step: 500)
+
+        // Case 3 thresholds (per-GPU): C/(2M), independent of P
+        let b_cb_h100 = C_h100 / (2 * M_h100)
+        let b_cb_gb200 = C_gb200 / (2 * M_gb200)
+
+        // Hopper P=8
+        let h100_p8 = dims.map(d => (d, calc.min(calc_bq_star(d, M_h100, R_h100, C_h100, 8) / 8, b_cb_h100)))
+        plot.add(
+          h100_p8,
+          style: (stroke: (paint: blue, thickness: 1.5pt)),
+          label: [H100 P=8],
+        )
+
+        // Blackwell P=8
+        let gb200_p8 = dims.map(d => (d, calc.min(calc_bq_star(d, M_gb200, R_gb200, C_gb200, 8) / 8, b_cb_gb200)))
+        plot.add(
+          gb200_p8,
+          style: (stroke: (paint: red, thickness: 1.5pt)),
+          label: [GB200 P=8],
+        )
+
+        // Blackwell P=32
+        let gb200_p32 = dims.map(d => (d, calc.min(calc_bq_star(d, M_gb200, R_gb200, C_gb200, 32) / 32, b_cb_gb200)))
+        plot.add(
+          gb200_p32,
+          style: (stroke: (paint: red, thickness: 1.5pt, dash: "dashed")),
+          label: [GB200 P=32],
+        )
+
+        // Annotated threshold lines
+        plot.add(
+          ((3000, b_cb_h100), (18000, b_cb_h100)),
+          style: (stroke: (paint: blue, thickness: 0.5pt, dash: "dotted")),
+          label: [H100 $C slash (2M)$],
+        )
+
+        plot.add(
+          ((3000, b_cb_gb200), (18000, b_cb_gb200)),
+          style: (stroke: (paint: red, thickness: 0.5pt, dash: "dotted")),
+          label: [GB200 $C slash (2M)$],
+        )
+      },
+    )
+  })
+}
+
+[_Decode crossover batch size vs model dimension for Hopper (H100) and Blackwell (GGB200)._]
 
 We derive the complete crossover between tensor-parallel (TP) and data-parallel
 (DP) attention, accounting for both memory-bound and compute-bound regimes.
@@ -177,7 +257,7 @@ The crossover batch size is the harmonic mean of:
 - *Deployment factor* $times$ *compute ratio*: $P slash 4 dot.c C slash M$
 
 This form cleanly separates hardware ratios ($R slash M$, $C slash M$) from
-model dimension ($H + D_k$) and deployment ($P$). For GB200: $R slash M = #calc.round(1.8 / 8.0, digits: 3)$
+model dimension ($H + D_k$) and deployment ($P$). For GGB200: $R slash M = #calc.round(1.8 / 8.0, digits: 3)$
 and $C slash M = #calc.round(5000 / 8.0)$ (FP8).
 
 Valid when $B Q_"cb,TP" < B Q < B Q_"cb,DP"$. For typical models/hardware,
@@ -192,7 +272,7 @@ $ T_"DP" &= (4 B Q H (H + D_k)) / (P C) \
 
 *DP always wins*---identical compute per rank, but TP pays AllReduce cost.
 
-=== Example: GLM-4.5 decode on GB200
+=== Example: GLM-4.5 decode on GGB200
 
 #{
   let P = 8
@@ -242,7 +322,7 @@ $ T_"DP" &= (4 B Q H (H + D_k)) / (P C) \
     found
   }
 
-  [GLM-4.5 ($n_q = #nq$, $n_k = #nk$, $d = #d$) on $P = #P$ GB200s, decode ($Q = #Q$).]
+  [GLM-4.5 ($n_q = #nq$, $n_k = #nk$, $d = #d$) on $P = #P$ GGB200s, decode ($Q = #Q$).]
 
   canvas({
     import draw: *
@@ -315,7 +395,7 @@ collective becomes more efficient, DP needs a larger batch to win:
 #{
   let P = 8
   let pf = (P - 1) / P
-  let M = 8.0    // TB/s (GB200)
+  let M = 8.0    // TB/s (GGB200)
   let R_peak = 1.8  // TB/s peak NVLink
 
   let models = (
@@ -355,7 +435,7 @@ collective becomes more efficient, DP needs a larger batch to win:
   })
 }
 
-#text(size: 0.85em)[_GB200, $P = 8$. Each line shows $B^*$ at a given AllReduce
+#text(size: 0.85em)[_GGB200, $P = 8$. Each line shows $B^*$ at a given AllReduce
 efficiency; below the line TP wins, above it DP wins._]
 
 #set text(size: 1em)

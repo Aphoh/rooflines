@@ -111,7 +111,7 @@ TYP
 </head>
 <body>
     <div class="container">
-        <div class="nav"><a href="../index.html">&larr; Back to KV Cache Calculator</a></div>
+        <div class="nav"><a href="../index.html">&larr; back</a></div>
         <div class="card">
             <div class="page page-desktop">${desktop_svg}</div>
             <div class="page page-mobile">${mobile_svg}</div>
