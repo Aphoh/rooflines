@@ -55,6 +55,7 @@
         .badge-mha { background: #d1fae5; color: #059669; }
         .badge-swa { background: #fef3c7; color: #d97706; }
         .badge-err { background: #fee2e2; color: #dc2626; }
+        .badge-hyb { background: #dbeafe; color: #2563eb; }
 
         input, select {
             padding: 0.4rem;
@@ -259,9 +260,9 @@
         </div>
 
         <div class="card">
-            <h2>Max Tokens in Flight (per GPU) <button class="download-btn" onclick="downloadChart('batchChart', 'max-tokens-in-flight', 'Max Tokens in Flight (per GPU)')">↓ PNG</button></h2>
+            <h2>Max Concurrent Requests vs Sequence Length <button class="download-btn" onclick="downloadChart('batchChart', 'max-concurrent-requests', 'Max Concurrent Requests vs Sequence Length')">↓ PNG</button></h2>
             <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.75rem;">
-                Total tokens = (GPU × 0.9 − weights/N) / KV per token = batch × seq_len
+                Max reqs = ⌊(GPU × 0.9 − weights/N) / (KV/tok × seq_len + fixed)⌋
             </p>
             <div class="slider-controls">
                 <div class="slider-group">
@@ -302,6 +303,7 @@
                 <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
                 <span class="badge badge-mha">MHA</span> Multi-Head Attention |
                 <span class="badge badge-swa">SWA</span> Sliding Window |
+                <span class="badge badge-hyb">Hybrid-Lin</span> Hybrid Linear |
                 <span class="badge badge-err">—</span> Exceeds GPU capacity
             </div>
         </div>
@@ -329,7 +331,8 @@
             <div class="legend-note">
                 <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
                 <span class="badge badge-mha">MHA</span> Multi-Head Attention |
-                <span class="badge badge-swa">SWA/Hybrid-SWA</span> Sliding Window
+                <span class="badge badge-swa">SWA/Hybrid-SWA</span> Sliding Window |
+                <span class="badge badge-hyb">Hybrid-Lin</span> Hybrid Linear
             </div>
         </div>
     </div>
@@ -461,6 +464,44 @@
                 max_position_embeddings: 131072,
                 total_params_b: 8,
                 active_params_b: 8
+            },
+            "GLM-5": {
+                architectures: ["GlmMoeDsaForCausalLM"],
+                num_hidden_layers: 78,
+                kv_lora_rank: 512,
+                qk_rope_head_dim: 64,
+                num_attention_heads: 64,
+                hidden_size: 6144,
+                max_position_embeddings: 202752,
+                nsa_index_bytes_per_layer: 132,
+                total_params_b: 744,
+                active_params_b: 40
+            },
+            "Qwen3.5-397B-A17B": {
+                architectures: ["Qwen3_5ForCausalLM"],
+                num_hidden_layers: 60,
+                num_attention_heads: 32,
+                num_key_value_heads: 2,
+                head_dim: 256,
+                hidden_size: 4096,
+                max_position_embeddings: 262144,
+                layer_types: ["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"],
+                linear_state_per_layer: 4268032,
+                total_params_b: 397,
+                active_params_b: 17
+            },
+            "Qwen3.5-122B-A10B": {
+                architectures: ["Qwen3_5ForCausalLM"],
+                num_hidden_layers: 48,
+                num_attention_heads: 32,
+                num_key_value_heads: 2,
+                head_dim: 256,
+                hidden_size: 3072,
+                max_position_embeddings: 262144,
+                layer_types: ["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"],
+                linear_state_per_layer: 4268032,
+                total_params_b: 122,
+                active_params_b: 10
             }
         };
 
@@ -468,7 +509,8 @@
             'DeepseekV2ForCausalLM', 'DeepseekV32ForCausalLM', 'DeepseekV3ForCausalLM',
             'DeepseekV3ForCausalLMNextN', 'DeepseekVL2ForCausalLM', 'LongcatFlashForCausalLM',
             'MistralLarge3ForCausalLM', 'PixtralForConditionalGeneration', 'MiniCPM3ForCausalLM',
-            'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM'
+            'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM',
+            'GlmMoeDsaForCausalLM'
         ];
 
         const BYTES_PER_DTYPE = { bf16: 2, fp8: 1 };
@@ -541,10 +583,12 @@
             let bf16, fp8, kvHeads, headDim;
             let numFullLayers = numLayers;
             let numSlidingLayers = 0;
+            let numLinearLayers = 0;
 
             if (layerTypes && Array.isArray(layerTypes)) {
                 numFullLayers = layerTypes.filter(t => t === 'full_attention').length;
                 numSlidingLayers = layerTypes.filter(t => t === 'sliding_attention').length;
+                numLinearLayers = layerTypes.filter(t => t === 'linear_attention').length;
             }
 
             if (useMLA) {
@@ -559,39 +603,52 @@
                 const numKVHeads = config.num_key_value_heads || config.num_attention_heads || 32;
                 const defaultHeadDim = config.hidden_size ? Math.floor(config.hidden_size / (config.num_attention_heads || 32)) : 128;
                 headDim = config.head_dim || defaultHeadDim;
-                bf16 = 2 * numLayers * numKVHeads * headDim * BYTES_PER_DTYPE.bf16;
-                fp8 = 2 * numLayers * numKVHeads * headDim * BYTES_PER_DTYPE.fp8;
+                const kvLayers = numLinearLayers > 0 ? numFullLayers : numLayers;
+                bf16 = 2 * kvLayers * numKVHeads * headDim * BYTES_PER_DTYPE.bf16;
+                fp8 = 2 * kvLayers * numKVHeads * headDim * BYTES_PER_DTYPE.fp8;
                 kvHeads = numKVHeads;
             }
+
+            // NSA indexer overhead (e.g. GLM-5): always uint8, same for bf16 and fp8
+            const nsaIndexBytes = config.nsa_index_bytes_per_layer || 0;
+            bf16 += numLayers * nsaIndexBytes;
+            fp8 += numLayers * nsaIndexBytes;
+
+            // Fixed per-request cost from linear attention recurrent states
+            const fixedPerRequest = numLinearLayers > 0 && config.linear_state_per_layer
+                ? numLinearLayers * config.linear_state_per_layer : 0;
 
             return {
                 bf16, fp8, useMLA, slidingWindow,
                 numLayers, kvHeads, headDim,
-                numFullLayers, numSlidingLayers,
-                hasHybrid: layerTypes !== null && numSlidingLayers > 0,
-                maxCtx: config.max_position_embeddings || 32768
+                numFullLayers, numSlidingLayers, numLinearLayers,
+                hasHybrid: layerTypes !== null && (numSlidingLayers > 0 || numLinearLayers > 0),
+                hasHybridLinear: layerTypes !== null && numLinearLayers > 0,
+                maxCtx: config.max_position_embeddings || 32768,
+                fixedPerRequest
             };
         }
 
         function getKVCacheAtSeqLen(result, seqLen, dtype) {
             const bytesPerElement = BYTES_PER_DTYPE[dtype];
-            
+            const fixed = result.fixedPerRequest || 0;
+
             if (result.hasHybrid && result.slidingWindow) {
                 const bytesPerLayerPerToken = 2 * result.kvHeads * result.headDim * bytesPerElement;
                 if (seqLen <= result.slidingWindow) {
-                    return result.numLayers * bytesPerLayerPerToken * seqLen;
+                    return result.numLayers * bytesPerLayerPerToken * seqLen + fixed;
                 } else {
                     const slidingContrib = result.numSlidingLayers * bytesPerLayerPerToken * result.slidingWindow;
                     const fullContrib = result.numFullLayers * bytesPerLayerPerToken * seqLen;
-                    return slidingContrib + fullContrib;
+                    return slidingContrib + fullContrib + fixed;
                 }
             }
-            
+
             const bytesPerToken = dtype === 'fp8' ? result.fp8 : result.bf16;
             if (result.slidingWindow && seqLen > result.slidingWindow) {
-                return bytesPerToken * result.slidingWindow;
+                return bytesPerToken * result.slidingWindow + fixed;
             }
-            return bytesPerToken * seqLen;
+            return bytesPerToken * seqLen + fixed;
         }
 
         const COLORS = [
@@ -633,6 +690,7 @@
                         data: modelData.map(m => dtype === 'fp8' ? m.result.fp8 : m.result.bf16),
                         backgroundColor: modelData.map(m => {
                             if (m.result.useMLA) return '#c084fc';
+                            if (m.result.hasHybridLinear) return '#60a5fa';
                             if (m.result.slidingWindow) return '#fbbf24';
                             return '#4ade80';
                         })
@@ -653,6 +711,7 @@
                                     const m = modelData[context.dataIndex];
                                     let label = context.raw.toLocaleString() + ' bytes/token';
                                     if (m.result.useMLA) label += ' (MLA)';
+                                    else if (m.result.hasHybridLinear) label += ' (Hybrid-Lin)';
                                     else if (m.result.hasHybrid) label += ' (Hybrid-SWA)';
                                     else if (m.result.slidingWindow) label += ' (SWA)';
                                     return label;
@@ -698,6 +757,7 @@
                         data: data,
                         backgroundColor: modelsWithSize.map(m => {
                             if (m.result.useMLA) return '#c084fc';
+                            if (m.result.hasHybridLinear) return '#60a5fa';
                             if (m.result.slidingWindow) return '#fbbf24';
                             return '#4ade80';
                         }),
@@ -720,6 +780,7 @@
                                     const m = point.model;
                                     let label = `${point.name}: ${point.x}B params, ${point.y.toLocaleString()} bytes/token`;
                                     if (m.result.useMLA) label += ' (MLA)';
+                                    else if (m.result.hasHybridLinear) label += ' (Hybrid-Lin)';
                                     else if (m.result.hasHybrid) label += ' (Hybrid-SWA)';
                                     else if (m.result.slidingWindow) label += ' (SWA)';
                                     return label;
@@ -842,7 +903,7 @@
                 pointHoverRadius: 5,
                 pointHoverBackgroundColor: m.color,
                 borderWidth: 2,
-                borderDash: m.result.slidingWindow ? [4, 4] : []
+                borderDash: m.result.slidingWindow ? [4, 4] : m.result.hasHybridLinear ? [8, 4] : []
             }));
 
             if (lineChart) lineChart.destroy();
@@ -924,53 +985,58 @@
             // Filter to models with parameter count
             const modelsWithParams = modelData.filter(m => m.config.total_params_b !== undefined);
 
-            // Calculate max tokens in flight for each model
-            const modelTokens = modelsWithParams.map(m => {
+            // Sequence lengths from 1K to 256K
+            const seqLens = [];
+            for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
+
+            const datasets = modelsWithParams.map((m, idx) => {
                 const totalWeightBytes = m.config.total_params_b * 1e9 * weightBytesPerParam;
                 const weightBytesPerGpu = totalWeightBytes / numGpus;
                 const availableForKV = Math.max(0, gpuMemoryBytes - weightBytesPerGpu);
-                const kvPerToken = kvDtype === 'fp8' ? m.result.fp8 : m.result.bf16;
-                const maxTokens = availableForKV > 0 ? Math.floor(availableForKV / kvPerToken) : 0;
-                return { ...m, maxTokens, weightBytesPerGpu, availableForKV };
-            });
 
-            // Sort by max tokens descending
-            modelTokens.sort((a, b) => b.maxTokens - a.maxTokens);
+                const data = seqLens.map(s => {
+                    if (availableForKV <= 0) return { x: s, y: 0 };
+                    const kvPerReq = getKVCacheAtSeqLen(m.result, s, kvDtype);
+                    const maxReqs = kvPerReq > 0 ? Math.floor(availableForKV / kvPerReq) : 0;
+                    return { x: s, y: Math.max(maxReqs, 0) };
+                });
+
+                return {
+                    label: m.name,
+                    data,
+                    borderColor: m.color,
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: m.color,
+                    borderWidth: 2,
+                    borderDash: m.result.slidingWindow ? [4, 4] : m.result.hasHybridLinear ? [8, 4] : []
+                };
+            });
 
             if (batchChart) batchChart.destroy();
             batchChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: modelTokens.map(m => m.name),
-                    datasets: [{
-                        data: modelTokens.map(m => m.maxTokens),
-                        backgroundColor: modelTokens.map(m => {
-                            if (m.maxTokens === 0) return '#dc2626';
-                            if (m.result.useMLA) return '#c084fc';
-                            if (m.result.slidingWindow) return '#fbbf24';
-                            return '#4ade80';
-                        })
-                    }]
-                },
+                type: 'line',
+                data: { datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y',
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { display: false },
+                        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
-                                    const m = modelTokens[context.dataIndex];
-                                    const weightGB = (m.weightBytesPerGpu / (1024**3)).toFixed(1);
-                                    const availGB = (m.availableForKV / (1024**3)).toFixed(1);
-                                    if (m.maxTokens === 0) {
-                                        return `Weights (${weightGB}GB) exceed GPU capacity`;
+                                title: function(items) {
+                                    if (items.length > 0) {
+                                        const x = items[0].raw.x;
+                                        return (x/1024) + 'K seq_len';
                                     }
-                                    return [
-                                        `${m.maxTokens.toLocaleString()} tokens (batch × seq_len)`,
-                                        `Weights: ${weightGB}GB/GPU, KV headroom: ${availGB}GB`
-                                    ];
+                                    return '';
+                                },
+                                label: function(context) {
+                                    const reqs = context.raw.y;
+                                    if (reqs === 0) return context.dataset.label + ': does not fit';
+                                    return context.dataset.label + ': ' + reqs.toLocaleString() + ' reqs';
                                 }
                             }
                         }
@@ -978,17 +1044,30 @@
                     scales: {
                         x: {
                             type: 'logarithmic',
-                            title: { display: true, text: 'Max Tokens in Flight (batch × seq_len)' },
-                            min: 500000,
+                            title: { display: true, text: 'Sequence Length' },
+                            min: 1024,
+                            max: 262144,
                             ticks: {
                                 callback: function(v) {
-                                    if (v >= 1e6) return (v / 1e6).toFixed(0) + 'M';
-                                    if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
-                                    return v;
+                                    const validTicks = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
+                                    if (validTicks.includes(v)) return (v/1024) + 'K';
+                                    return '';
                                 }
                             }
                         },
-                        y: { ticks: { font: { size: 10 } } }
+                        y: {
+                            type: 'logarithmic',
+                            title: { display: true, text: 'Max Concurrent Requests' },
+                            min: 1,
+                            ticks: {
+                                callback: function(v) {
+                                    if ([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000].includes(v)) {
+                                        return v.toLocaleString();
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -1003,6 +1082,7 @@
 
                 let typeClass, typeText;
                 if (r.useMLA) { typeClass = 'badge-mla'; typeText = 'MLA'; }
+                else if (r.hasHybridLinear) { typeClass = 'badge-hyb'; typeText = 'Hybrid-Lin'; }
                 else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hybrid-SWA'; }
                 else if (r.slidingWindow) { typeClass = 'badge-swa'; typeText = 'SWA'; }
                 else { typeClass = 'badge-mha'; typeText = 'MHA'; }
@@ -1011,12 +1091,14 @@
                 const fp8At128k = getKVCacheAtSeqLen(r, ctx128k, 'fp8');
 
                 let layersInfo = r.numLayers;
-                if (r.hasHybrid) layersInfo = `${r.numFullLayers}F+${r.numSlidingLayers}S`;
+                if (r.hasHybridLinear) layersInfo = `${r.numFullLayers}F+${r.numLinearLayers}L`;
+                else if (r.hasHybrid) layersInfo = `${r.numFullLayers}F+${r.numSlidingLayers}S`;
 
                 const bounded = r.slidingWindow && ctx128k > r.slidingWindow;
+                const fixedNote = r.fixedPerRequest > 0 ? ` <span style="color:#666;font-size:0.7rem">+${formatBytes(r.fixedPerRequest)}/req</span>` : '';
 
                 return `<tr>
-                    <td><strong>${m.name}</strong></td>
+                    <td><strong>${m.name}</strong>${fixedNote}</td>
                     <td><span class="badge ${typeClass}">${typeText}</span></td>
                     <td>${layersInfo}</td>
                     <td>${r.useMLA ? '-' : r.kvHeads}</td>

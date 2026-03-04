@@ -26,6 +26,14 @@ python3 test.py    # Python test suite with verification
 node test.js       # Node.js test suite
 ```
 
+**Python scripts (sympy, etc.):**
+```bash
+# Use the project venv (has sympy installed)
+.venv/bin/python3 posts/dp-vs-tp-attention.py
+# Or activate: source .venv/bin/activate
+# To add packages: uv pip install <package> (with venv active)
+```
+
 ## Directory Structure
 
 ```

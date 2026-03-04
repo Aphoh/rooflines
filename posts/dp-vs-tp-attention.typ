@@ -11,10 +11,10 @@
   )[
     *TL;DR* — DP vs TP crossover for GQA attention (FP8):
 
-    $ B Q^* = "harmonic mean"(R / (2 M) (H + D_k), P / 4 dot.c C / M) $
+    $ B Q^* = "harmonic mean"(R / (2 M) (D_q + D_k), P / 4 dot.c C / M) $
 
     where $B$ is batch size, $Q$ is query tokens per sequence, $M$ is HBM bandwidth,
-    $R$ is AllReduce bandwidth, $H$ is hidden dimension, $D_k$ is KV dimension,
+    $R$ is AllReduce bandwidth, $D_q = n_q d$ is query dimension, $D_k = n_k d$ is KV dimension,
     $P$ is parallelism degree, and $C$ is compute (FLOPs/s).
 
     TP wins below $B Q^*$, DP wins above. Above $B Q = P C slash (2M)$, DP is always
@@ -32,7 +32,7 @@
   let R_gb200 = 1.8    // TB/s
   let C_gb200 = 5000.0 // TFLOPS
 
-  // Calculate BQ* for a given (H+D_k), hardware, and P
+  // Calculate BQ* for a given (D_q+D_k), hardware, and P
   let calc_bq_star(dim, M, R, C, P) = {
     let a = R / (2 * M) * dim
     let b = P / 4 * C / M
@@ -50,7 +50,7 @@
 
     plot.plot(
       size: (7, 6),
-      x-label: [$H + D_k$],
+      x-label: [$D_q + D_k$],
       y-label: [$B^* slash P$],
       x-tick-step: 3000,
       y-tick-step: 100,
@@ -123,7 +123,8 @@ a batch of $B$ total tokens at context length $L$.
   table.header([*Symbol*], [*Definition*]),
   [$n_q, n_k$], [query and KV head counts],
   [$d$], [head dimension],
-  [$H = n_q d$], [hidden dimension],
+  [$H$], [hidden dimension ($H eq.not n_q d$ in general, e.g. GLM-5)],
+  [$D_q = n_q d$], [query dimension],
   [$D_k = n_k d$], [KV dimension],
   [$M$], [HBM bandwidth (bytes/s)],
   [$R$], [realised AllReduce ICI bandwidth (bytes/s)],
@@ -132,7 +133,7 @@ a batch of $B$ total tokens at context length $L$.
 
 The Q, K, V, O projections have total weight bytes (FP8, 1 byte per element):
 
-$ W = underbrace(H^2, Q) + underbrace(H D_k, K) + underbrace(H D_k, V) + underbrace(H^2, O) = 2 H (H + D_k) $
+$ W = underbrace(H D_q, Q) + underbrace(H D_k, K) + underbrace(H D_k, V) + underbrace(D_q H, O) = 2 H (D_q + D_k) $
 
 We also add $Q$ for query tokens per sequence (1 for decode, $L$ for prefill, $1 + n_"draft"$ for spec-dec).
 
@@ -148,9 +149,9 @@ We derive complete formulas accounting for both bottlenecks.
 - TP: each GPU processes all $B$ sequences cooperatively (head sharded)
 
 For $B$ sequences with $Q$ query tokens each:
-- Projection weights: $W = 2 H (H + D_k)$ bytes (FP8)
-- Total FLOPs: $4 B Q H (H + D_k)$
-- Per-GPU FLOPs (both approaches): $4 B Q H (H + D_k) slash P$
+- Projection weights: $W = 2 H (D_q + D_k)$ bytes (FP8)
+- Total FLOPs: $4 B Q H (D_q + D_k)$
+- Per-GPU FLOPs (both approaches): $4 B Q H (D_q + D_k) slash P$
 
 *Per-GPU latency:*
 
@@ -160,16 +161,16 @@ For $B$ sequences with $Q$ query tokens each:
     inset: 12pt,
     radius: 4pt,
   )[
-    $ T_"DP" &= max(underbrace(W / M, "load"), underbrace((4 B Q H (H + D_k)) / (P C), "compute")) \
-      T_"TP" &= max(underbrace(W / (P M), "load"), underbrace((4 B Q H (H + D_k)) / (P C), "compute")) + underbrace((2 B Q H) / R, "AllReduce") $
+    $ T_"DP" &= max(underbrace(W / M, "load"), underbrace((4 B Q H (D_q + D_k)) / (P C), "compute")) \
+      T_"TP" &= max(underbrace(W / (P M), "load"), underbrace((4 B Q H (D_q + D_k)) / (P C), "compute")) + underbrace((2 B Q H) / R, "AllReduce") $
   ]
 ]
 
 *DP:* Each GPU loads all $W$ weights and computes on $B slash P$ sequences
-($4 (B slash P) Q H (H + D_k)$ FLOPs per GPU).
+($4 (B slash P) Q H (D_q + D_k)$ FLOPs per GPU).
 
 *TP:* Each GPU loads $W slash P$ weights (sharded) and computes on all $B$
-sequences but only $n_k slash P$ heads ($4 B Q H (H + D_k) slash P$ FLOPs per GPU).
+sequences but only $n_q slash P$ query heads ($4 B Q H (D_q + D_k) slash P$ FLOPs per GPU).
 
 Both have identical per-GPU compute. The AllReduce communicates the full $B Q H$
 output (all GPUs cooperate on all sequences).
@@ -202,17 +203,17 @@ $ W / (P M) + (2 B Q H) / R = W / M $
 
 Solving for $B Q$:
 
-$ B Q^* = (W (P - 1) R) / (2 H P M) = ((H + D_k)(P - 1) R) / (P M) $
+$ B Q^* = (W (P - 1) R) / (2 H P M) = ((D_q + D_k)(P - 1) R) / (P M) $
 
 *However:* This crossover is only valid when $B Q < B Q_"cb,TP"$ (TP still
 memory-bound). TP becomes compute-bound when $B Q = C slash (2 M)$. For
 Case 1 to reach its crossover, we need:
 
-$ (H + D_k)(P - 1) R / (P M) < C / (2 M) $
+$ (D_q + D_k)(P - 1) R / (P M) < C / (2 M) $
 
-Rearranging: $(H + D_k)(P - 1) slash P < C slash (2 R)$. For typical hardware,
+Rearranging: $(D_q + D_k)(P - 1) slash P < C slash (2 R)$. For typical hardware,
 $C slash (2 R) approx #calc.round(2250 / (2 * 0.9))$ (Hopper) or $approx #calc.round(5000 / (2 * 1.8))$ (Blackwell), but most models have
-$(H + D_k)(P - 1) slash P > 4000$. Therefore, this crossover *never happens*
+$(D_q + D_k)(P - 1) slash P > 4000$. Therefore, this crossover *never happens*
 in practice---TP becomes compute-bound first.
 
 ==== Case 2: DP memory-bound, TP compute-bound
@@ -220,25 +221,25 @@ in practice---TP becomes compute-bound first.
 When DP is memory-bound but TP has become compute-bound ($B Q > B Q_"cb,TP"$):
 
 $ T_"DP" &= W / M \
-  T_"TP" &= (4 B Q H (H + D_k)) / (P C) + (2 B Q H) / R $
+  T_"TP" &= (4 B Q H (D_q + D_k)) / (P C) + (2 B Q H) / R $
 
 *This is where the actual crossover happens* in practice. Both compute and
 AllReduce terms grow linearly with $B Q$. Setting $T_"TP" = T_"DP"$:
 
-$ (4 B Q H (H + D_k)) / (P C) + (2 B Q H) / R = W / M $
+$ (4 B Q H (D_q + D_k)) / (P C) + (2 B Q H) / R = W / M $
 
 Factor out $B Q H$ and solve:
 
-$ B Q^* = (W P C R) / (M (4 H (H + D_k) R + 2 H P C)) $
+$ B Q^* = (W P C R) / (M (4 H (D_q + D_k) R + 2 H P C)) $
 
-Substitute $W = 2 H (H + D_k)$ and simplify:
+Substitute $W = 2 H (D_q + D_k)$ and simplify:
 
-$ B Q^* = (C P R (H + D_k)) / (M (C P + 2 R (H + D_k))) $
+$ B Q^* = (C P R (D_q + D_k)) / (M (C P + 2 R (D_q + D_k))) $
 
 Rewrite with each constant in minimal factors. Divide numerator and denominator
 by $2 M$ to expose bandwidth ratios:
 
-$ B Q^* = 1 / (underbrace(M / (R (H + D_k)), "communication") + underbrace(2 M / (P C), "compute")) $
+$ B Q^* = 1 / (underbrace(M / (R (D_q + D_k)), "communication") + underbrace(2 M / (P C), "compute")) $
 
 This is the *harmonic mean* with hardware ratios separated from model/deployment!
 
@@ -248,16 +249,16 @@ This is the *harmonic mean* with hardware ratios separated from model/deployment
     inset: 12pt,
     radius: 4pt,
   )[
-    $ B Q^* = "harmonic mean"(underbrace(R / (2 M), "hardware") (H + D_k), P / 4 dot.c underbrace(C / M, "hardware")) $
+    $ B Q^* = "harmonic mean"(underbrace(R / (2 M), "hardware") (D_q + D_k), P / 4 dot.c underbrace(C / M, "hardware")) $
   ]
 ]
 
 The crossover batch size is the harmonic mean of:
-- *AllReduce ratio* $times$ *model dimension*: $R slash (2 M) dot.c (H + D_k)$
+- *AllReduce ratio* $times$ *projection dimension*: $R slash (2 M) dot.c (D_q + D_k)$
 - *Deployment factor* $times$ *compute ratio*: $P slash 4 dot.c C slash M$
 
 This form cleanly separates hardware ratios ($R slash M$, $C slash M$) from
-model dimension ($H + D_k$) and deployment ($P$). For GGB200: $R slash M = #calc.round(1.8 / 8.0, digits: 3)$
+projection dimension ($D_q + D_k$) and deployment ($P$). For GGB200: $R slash M = #calc.round(1.8 / 8.0, digits: 3)$
 and $C slash M = #calc.round(5000 / 8.0)$ (FP8).
 
 Valid when $B Q_"cb,TP" < B Q < B Q_"cb,DP"$. For typical models/hardware,
@@ -267,8 +268,8 @@ the crossover falls in this regime.
 
 When both approaches hide weight loads behind compute (at very high $B Q$):
 
-$ T_"DP" &= (4 B Q H (H + D_k)) / (P C) \
-  T_"TP" &= (4 B Q H (H + D_k)) / (P C) + (2 B Q H) / R $
+$ T_"DP" &= (4 B Q H (D_q + D_k)) / (P C) \
+  T_"TP" &= (4 B Q H (D_q + D_k)) / (P C) + (2 B Q H) / R $
 
 *DP always wins*---identical compute per rank, but TP pays AllReduce cost.
 
@@ -282,10 +283,11 @@ $ T_"DP" &= (4 B Q H (H + D_k)) / (P C) \
   let nq = 96
   let nk = 8
   let d = 128
-  let H = nq * d
+  let D_q = nq * d
+  let H = D_q  // H = D_q for GLM-4.5
   let D_k = nk * d
-  let dim = d * (nq + nk)
-  let W_bytes = 2 * H * (H + D_k)  // FP8
+  let dim = D_q + D_k
+  let W_bytes = 2 * H * (D_q + D_k)  // FP8
   let Q = 1  // decode
 
   // Convert everything to microseconds for the plot
@@ -295,13 +297,13 @@ $ T_"DP" &= (4 B Q H (H + D_k)) / (P C) \
 
   let t_dp(BQ) = {
     let load = W_bytes / M_us
-    let compute = 4 * BQ * H * (H + D_k) / (P * C_us)
+    let compute = 4 * BQ * H * (D_q + D_k) / (P * C_us)
     calc.max(load, compute)
   }
 
   let t_tp(BQ) = {
     let load = W_bytes / (P * M_us)
-    let compute = 4 * BQ * H * (H + D_k) / (P * C_us)
+    let compute = 4 * BQ * H * (D_q + D_k) / (P * C_us)
     let ar = 2 * BQ * H / R_us  // FP8
     calc.max(load, compute) + ar
   }

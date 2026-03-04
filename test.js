@@ -20,6 +20,7 @@ const MLA_ARCHITECTURES = [
     'MiniCPM3ForCausalLM',
     'KimiVLForConditionalGeneration',
     'KimiLinearForCausalLM',
+    'GlmMoeDsaForCausalLM',
 ];
 
 const BYTES_PER_DTYPE = { bf16: 2, fp16: 2, fp8: 1, int8: 1, fp32: 4 };
@@ -52,30 +53,48 @@ function getTextConfig(config) {
 function calculateKVCache(config, tpSize = 1) {
     const textConfig = getTextConfig(config);
     const architectures = config.architectures || [];
-    const useMLA = isMLA(architectures);
+    const useMLA = isMLA(architectures) || !!textConfig.kv_lora_rank;
     const slidingWindow = getSlidingWindow(config);
-    
+    const layerTypes = textConfig.layer_types || null;
+
     const numLayers = textConfig.num_hidden_layers || textConfig.n_layer || 32;
     const numKVHeads = textConfig.num_key_value_heads || textConfig.num_attention_heads || 32;
     const defaultHeadDim = textConfig.hidden_size ? Math.floor(textConfig.hidden_size / (textConfig.num_attention_heads || 32)) : 128;
     const headDim = textConfig.head_dim || defaultHeadDim;
-    
+
+    let numFullLayers = numLayers;
+    let numLinearLayers = 0;
+    if (layerTypes && Array.isArray(layerTypes)) {
+        numFullLayers = layerTypes.filter(t => t === 'full_attention').length;
+        numLinearLayers = layerTypes.filter(t => t === 'linear_attention').length;
+    }
+
     let bf16, fp8;
-    
+
     if (useMLA) {
         const kvLoraRank = textConfig.kv_lora_rank || 512;
         const qkRopeHeadDim = textConfig.qk_rope_head_dim || 64;
         const latentDim = kvLoraRank + qkRopeHeadDim;
-        
+
         bf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
         fp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
     } else {
         const kvHeadsPerTP = Math.max(1, Math.floor(numKVHeads / tpSize));
-        bf16 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
-        fp8 = 2 * numLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
+        const kvLayers = numLinearLayers > 0 ? numFullLayers : numLayers;
+        bf16 = 2 * kvLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.bf16;
+        fp8 = 2 * kvLayers * kvHeadsPerTP * headDim * BYTES_PER_DTYPE.fp8;
     }
-    
-    return { bf16, fp8, useMLA, slidingWindow };
+
+    // NSA indexer overhead (e.g. GLM-5)
+    const nsaIndexBytes = textConfig.nsa_index_bytes_per_layer || 0;
+    bf16 += numLayers * nsaIndexBytes;
+    fp8 += numLayers * nsaIndexBytes;
+
+    // Fixed per-request cost from linear attention recurrent states
+    const fixedPerRequest = numLinearLayers > 0 && textConfig.linear_state_per_layer
+        ? numLinearLayers * textConfig.linear_state_per_layer : 0;
+
+    return { bf16, fp8, useMLA, slidingWindow, fixedPerRequest };
 }
 
 // Test configurations
@@ -251,6 +270,47 @@ const TEST_CASES = [
             hidden_size: 2560
         },
         expected: { bf16: 71424, fp8: 35712, useMLA: true, slidingWindow: null }
+    },
+    {
+        name: "GLM-5 (MLA+NSA)",
+        config: {
+            architectures: ["GlmMoeDsaForCausalLM"],
+            num_hidden_layers: 78,
+            kv_lora_rank: 512,
+            qk_rope_head_dim: 64,
+            num_attention_heads: 64,
+            hidden_size: 6144,
+            nsa_index_bytes_per_layer: 132
+        },
+        expected: { bf16: 100152, fp8: 55224, useMLA: true, slidingWindow: null }
+    },
+    {
+        name: "Qwen3.5-397B-A17B (Hybrid-Linear)",
+        config: {
+            architectures: ["Qwen3_5ForCausalLM"],
+            num_hidden_layers: 60,
+            num_attention_heads: 32,
+            num_key_value_heads: 2,
+            head_dim: 256,
+            hidden_size: 4096,
+            layer_types: Array(15).fill(["linear_attention","linear_attention","linear_attention","full_attention"]).flat(),
+            linear_state_per_layer: 4268032
+        },
+        expected: { bf16: 30720, fp8: 15360, useMLA: false, slidingWindow: null, fixedPerRequest: 45 * 4268032 }
+    },
+    {
+        name: "Qwen3.5-122B-A10B (Hybrid-Linear)",
+        config: {
+            architectures: ["Qwen3_5ForCausalLM"],
+            num_hidden_layers: 48,
+            num_attention_heads: 32,
+            num_key_value_heads: 2,
+            head_dim: 256,
+            hidden_size: 3072,
+            layer_types: Array(12).fill(["linear_attention","linear_attention","linear_attention","full_attention"]).flat(),
+            linear_state_per_layer: 4268032
+        },
+        expected: { bf16: 24576, fp8: 12288, useMLA: false, slidingWindow: null, fixedPerRequest: 36 * 4268032 }
     }
 ];
 
@@ -270,6 +330,9 @@ for (const testCase of TEST_CASES) {
         { name: 'MLA', actual: result.useMLA, expected: testCase.expected.useMLA },
         { name: 'SWA', actual: result.slidingWindow, expected: testCase.expected.slidingWindow }
     ];
+    if (testCase.expected.fixedPerRequest !== undefined) {
+        checks.push({ name: 'FixedPerRequest', actual: result.fixedPerRequest, expected: testCase.expected.fixedPerRequest });
+    }
     
     const allPass = checks.every(c => c.actual === c.expected);
     if (allPass) passed++; else failed++;

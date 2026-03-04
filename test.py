@@ -11,7 +11,8 @@ MLA_ARCHITECTURES = [
     'DeepseekV2ForCausalLM', 'DeepseekV32ForCausalLM', 'DeepseekV3ForCausalLM',
     'DeepseekV3ForCausalLMNextN', 'DeepseekVL2ForCausalLM', 'LongcatFlashForCausalLM',
     'MistralLarge3ForCausalLM', 'PixtralForConditionalGeneration', 'MiniCPM3ForCausalLM',
-    'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM'
+    'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM',
+    'GlmMoeDsaForCausalLM'
 ]
 
 BYTES_PER_DTYPE = {'bf16': 2, 'fp16': 2, 'fp8': 1}
@@ -48,12 +49,14 @@ def calculate_kv_cache(config, tp_size=1):
     sliding_window = get_sliding_window(config)
     layer_types = config.get('layer_types')
     
-    # Count full vs sliding attention layers for hybrid models
+    # Count full vs sliding/linear attention layers for hybrid models
     num_full_layers = num_layers
     num_sliding_layers = 0
+    num_linear_layers = 0
     if layer_types and isinstance(layer_types, list):
         num_full_layers = sum(1 for t in layer_types if t == 'full_attention')
         num_sliding_layers = sum(1 for t in layer_types if t == 'sliding_attention')
+        num_linear_layers = sum(1 for t in layer_types if t == 'linear_attention')
 
     if use_mla:
         kv_lora_rank = config.get('kv_lora_rank', 512)
@@ -71,41 +74,55 @@ def calculate_kv_cache(config, tp_size=1):
         default_head_dim = hidden_size // num_attention_heads if num_attention_heads else 128
         head_dim = config.get('head_dim', default_head_dim)
         kv_heads_per_tp = max(1, num_kv_heads // tp_size)
+        kv_layers = num_full_layers if num_linear_layers > 0 else num_layers
 
-        bf16 = 2 * num_layers * kv_heads_per_tp * head_dim * BYTES_PER_DTYPE['bf16']
-        fp8 = 2 * num_layers * kv_heads_per_tp * head_dim * BYTES_PER_DTYPE['fp8']
+        bf16 = 2 * kv_layers * kv_heads_per_tp * head_dim * BYTES_PER_DTYPE['bf16']
+        fp8 = 2 * kv_layers * kv_heads_per_tp * head_dim * BYTES_PER_DTYPE['fp8']
         kv_heads = kv_heads_per_tp
+
+    # NSA indexer overhead (e.g. GLM-5): always uint8, same for bf16 and fp8
+    nsa_index_bytes = config.get('nsa_index_bytes_per_layer', 0)
+    bf16 += num_layers * nsa_index_bytes
+    fp8 += num_layers * nsa_index_bytes
+
+    # Fixed per-request cost from linear attention recurrent states
+    linear_state = config.get('linear_state_per_layer', 0)
+    fixed_per_request = num_linear_layers * linear_state if num_linear_layers > 0 and linear_state else 0
 
     return {
         'bf16': bf16, 'fp8': fp8, 'use_mla': use_mla, 'sliding_window': sliding_window,
         'num_layers': num_layers, 'kv_heads': kv_heads, 'head_dim': head_dim,
         'num_full_layers': num_full_layers, 'num_sliding_layers': num_sliding_layers,
-        'has_hybrid': layer_types is not None and num_sliding_layers > 0
+        'num_linear_layers': num_linear_layers,
+        'has_hybrid': layer_types is not None and (num_sliding_layers > 0 or num_linear_layers > 0),
+        'has_hybrid_linear': layer_types is not None and num_linear_layers > 0,
+        'fixed_per_request': fixed_per_request
     }
 
 
 def get_kv_at_seq_len(result, seq_len, dtype='bf16'):
     bytes_per_element = BYTES_PER_DTYPE['fp8'] if dtype == 'fp8' else BYTES_PER_DTYPE['bf16']
     sw = result['sliding_window']
-    
+    fixed = result.get('fixed_per_request', 0)
+
     # For hybrid attention (some sliding, some full layers)
     if result.get('has_hybrid') and result['num_sliding_layers'] > 0 and sw:
         bytes_per_layer_per_token = 2 * result['kv_heads'] * result['head_dim'] * bytes_per_element
-        
+
         if seq_len <= sw:
             # All layers contribute fully
-            return result['num_layers'] * bytes_per_layer_per_token * seq_len
+            return result['num_layers'] * bytes_per_layer_per_token * seq_len + fixed
         else:
             # Sliding layers bounded, full layers grow
             sliding_contrib = result['num_sliding_layers'] * bytes_per_layer_per_token * sw
             full_contrib = result['num_full_layers'] * bytes_per_layer_per_token * seq_len
-            return sliding_contrib + full_contrib
-    
+            return sliding_contrib + full_contrib + fixed
+
     # Standard sliding window (all layers bounded)
     bytes_per_token = result['fp8'] if dtype == 'fp8' else result['bf16']
     if sw and seq_len > sw:
-        return bytes_per_token * sw
-    return bytes_per_token * seq_len
+        return bytes_per_token * sw + fixed
+    return bytes_per_token * seq_len + fixed
 
 
 # Real model configurations (fetched from HuggingFace)
@@ -234,6 +251,38 @@ MODELS = {
         "head_dim": 128,
         "hidden_size": 4096,
         "max_position_embeddings": 131072
+    },
+    "GLM-5": {
+        "architectures": ["GlmMoeDsaForCausalLM"],
+        "num_hidden_layers": 78,
+        "kv_lora_rank": 512,
+        "qk_rope_head_dim": 64,
+        "num_attention_heads": 64,
+        "hidden_size": 6144,
+        "max_position_embeddings": 202752,
+        "nsa_index_bytes_per_layer": 132
+    },
+    "Qwen3.5-397B-A17B": {
+        "architectures": ["Qwen3_5ForCausalLM"],
+        "num_hidden_layers": 60,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 2,
+        "head_dim": 256,
+        "hidden_size": 4096,
+        "max_position_embeddings": 262144,
+        "layer_types": ["linear_attention","linear_attention","linear_attention","full_attention"] * 15,
+        "linear_state_per_layer": 4268032
+    },
+    "Qwen3.5-122B-A10B": {
+        "architectures": ["Qwen3_5ForCausalLM"],
+        "num_hidden_layers": 48,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 2,
+        "head_dim": 256,
+        "hidden_size": 3072,
+        "max_position_embeddings": 262144,
+        "layer_types": ["linear_attention","linear_attention","linear_attention","full_attention"] * 12,
+        "linear_state_per_layer": 4268032
     }
 }
 
@@ -252,6 +301,9 @@ EXPECTED = {
     "Mistral-7B-SWA": {"bf16": 2 * 32 * 8 * 128 * 2, "fp8": 2 * 32 * 8 * 128, "use_mla": False, "sliding_window": 4096},
     "Llama-3.1-70B": {"bf16": 2 * 80 * 8 * 128 * 2, "fp8": 2 * 80 * 8 * 128, "use_mla": False},  # 327680, 163840
     "Llama-3.1-8B": {"bf16": 2 * 32 * 8 * 128 * 2, "fp8": 2 * 32 * 8 * 128, "use_mla": False},   # 131072, 65536
+    "GLM-5": {"bf16": 78 * 576 * 2 + 78 * 132, "fp8": 78 * 576 + 78 * 132, "use_mla": True},  # 100152, 55224
+    "Qwen3.5-397B-A17B": {"bf16": 2 * 15 * 2 * 256 * 2, "fp8": 2 * 15 * 2 * 256, "use_mla": False},  # 30720, 15360
+    "Qwen3.5-122B-A10B": {"bf16": 2 * 12 * 2 * 256 * 2, "fp8": 2 * 12 * 2 * 256, "use_mla": False},  # 24576, 12288
 }
 
 
@@ -280,6 +332,8 @@ def main():
     for name, config, result in results:
         if result['use_mla']:
             type_str = "MLA"
+        elif result.get('has_hybrid_linear'):
+            type_str = "HybLin"
         elif result.get('has_hybrid'):
             type_str = "Hybrid"
         elif result['sliding_window']:
@@ -293,7 +347,9 @@ def main():
         has_bounding = result['sliding_window'] and ctx_len > result['sliding_window']
         
         # Layer info
-        if result.get('has_hybrid'):
+        if result.get('has_hybrid_linear'):
+            layer_info = f"{result['num_full_layers']}F+{result['num_linear_layers']}L"
+        elif result.get('has_hybrid'):
             layer_info = f"{result['num_full_layers']}F+{result['num_sliding_layers']}S"
         else:
             layer_info = str(config.get('num_hidden_layers', 32))
