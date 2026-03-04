@@ -253,14 +253,21 @@
         </div>
 
         <div class="card">
-            <h2>KV Cache Size vs Sequence Length <button class="download-btn" onclick="downloadChart('lineChart', 'kv-vs-seqlen', 'KV Cache Size vs Sequence Length')">↓ PNG</button></h2>
+            <h2>KV Cache per Request at Key Sequence Lengths <button class="download-btn" onclick="downloadChart('lineChart', 'kv-at-seqlens', 'KV Cache per Request at Key Sequence Lengths')">↓ PNG</button></h2>
             <div class="chart-container">
                 <canvas id="lineChart"></canvas>
+            </div>
+            <div class="legend-note">
+                <span class="badge badge-mla">MLA</span>
+                <span class="badge badge-mha">MHA</span>
+                <span class="badge badge-swa">SWA</span>
+                <span class="badge badge-hyb">Hybrid</span>
+                &nbsp;| Lighter bars = shorter context
             </div>
         </div>
 
         <div class="card">
-            <h2>Max Concurrent Requests vs Sequence Length <button class="download-btn" onclick="downloadChart('batchChart', 'max-concurrent-requests', 'Max Concurrent Requests vs Sequence Length')">↓ PNG</button></h2>
+            <h2>Max Concurrent Requests at Key Sequence Lengths <button class="download-btn" onclick="downloadChart('batchChart', 'max-concurrent-requests', 'Max Concurrent Requests at Key Sequence Lengths')">↓ PNG</button></h2>
             <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.75rem;">
                 Max reqs = ⌊(GPU × 0.9 − weights/N) / (KV/tok × seq_len + fixed)⌋
             </p>
@@ -300,7 +307,11 @@
                 <canvas id="batchChart"></canvas>
             </div>
             <div class="legend-note">
-                Color = vendor. Line style: ── MHA &nbsp; ╌╌ MLA &nbsp; ·· SWA &nbsp; ─·─ Hybrid-Linear
+                <span class="badge badge-mla">MLA</span>
+                <span class="badge badge-mha">MHA</span>
+                <span class="badge badge-swa">SWA</span>
+                <span class="badge badge-hyb">Hybrid</span>
+                &nbsp;| Lighter bars = shorter context
             </div>
         </div>
 
@@ -323,9 +334,6 @@
                     </thead>
                     <tbody id="model-tbody"></tbody>
                 </table>
-            </div>
-            <div class="legend-note">
-                Color = vendor. Line style: ── MHA &nbsp; ╌╌ MLA &nbsp; ·· SWA &nbsp; ─·─ Hybrid-Linear
             </div>
         </div>
     </div>
@@ -644,37 +652,10 @@
             return bytesPerToken * seqLen + fixed;
         }
 
-        const VENDOR_COLORS = {
-            DeepSeek: '#3b82f6',
-            Moonshot: '#8b5cf6',
-            Zhipu:   '#14b8a6',
-            MiniMax: '#ec4899',
-            Alibaba: '#f97316',
-            Meta:    '#22c55e',
-            Mistral: '#ef4444',
-            OpenAI:  '#6b7280'
-        };
-
-        function getVendor(name) {
-            if (name.startsWith('DeepSeek')) return 'DeepSeek';
-            if (name.startsWith('Kimi')) return 'Moonshot';
-            if (name.startsWith('GLM')) return 'Zhipu';
-            if (name.startsWith('MiniMax')) return 'MiniMax';
-            if (name.startsWith('Qwen')) return 'Alibaba';
-            if (name.startsWith('Llama')) return 'Meta';
-            if (name.startsWith('Mistral') || name.startsWith('Mixtral')) return 'Mistral';
-            if (name.startsWith('GPT')) return 'OpenAI';
-            return 'Other';
-        }
-
-        function getTypeDash(result) {
-            if (result.hasHybridLinear) return [8, 4, 2, 4];
-            if (result.slidingWindow) return [2, 3];
-            if (result.useMLA) return [6, 3];
-            return [];
-        }
-
-        const COLORS = Object.values(VENDOR_COLORS);
+        const COLORS = [
+            '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16'
+        ];
 
         function initModels() {
             models = { ...BUILTIN_MODELS };
@@ -685,9 +666,7 @@
 
             const modelData = Object.entries(models).map(([name, config], index) => {
                 const result = calculateKVCache(config);
-                const vendor = getVendor(name);
-                const color = VENDOR_COLORS[vendor] || COLORS[index % COLORS.length];
-                return { name, config, result, color, vendor };
+                return { name, config, result, color: COLORS[index % COLORS.length] };
             });
 
             modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
@@ -910,50 +889,49 @@
             else scatterChartTotal = chart;
         }
 
+        const SEQ_LENS = [
+            { len: 4096, label: '4K', opacity: 0.4 },
+            { len: 32768, label: '32K', opacity: 0.65 },
+            { len: 131072, label: '128K', opacity: 1.0 }
+        ];
+
+        function getTypeColor(result, opacity) {
+            if (result.useMLA) return `rgba(139, 92, 246, ${opacity})`;       // purple
+            if (result.hasHybridLinear) return `rgba(59, 130, 246, ${opacity})`; // blue
+            if (result.slidingWindow) return `rgba(234, 179, 8, ${opacity})`;   // yellow
+            return `rgba(34, 197, 94, ${opacity})`;                             // green (MHA)
+        }
+
         function renderLineChart(modelData, dtype) {
             const ctx = document.getElementById('lineChart').getContext('2d');
 
-            const seqLens = [];
-            for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
-
-            // Sort by KV cache at 128K descending (biggest first in legend)
+            // Sort by 128K KV cache ascending (smallest at top for horizontal bar)
             const sorted = [...modelData].sort((a, b) =>
-                getKVCacheAtSeqLen(b.result, 131072, dtype) - getKVCacheAtSeqLen(a.result, 131072, dtype)
+                getKVCacheAtSeqLen(a.result, 131072, dtype) - getKVCacheAtSeqLen(b.result, 131072, dtype)
             );
 
-            const datasets = sorted.map((m, idx) => ({
-                label: m.name,
-                data: seqLens.map(s => ({ x: s, y: getKVCacheAtSeqLen(m.result, s, dtype) })),
-                borderColor: m.color,
-                fill: false,
-                pointRadius: 0,
-                pointHoverRadius: 5,
-                pointHoverBackgroundColor: m.color,
-                borderWidth: 2,
-                borderDash: getTypeDash(m.result)
+            const labels = sorted.map(m => m.name);
+            const datasets = SEQ_LENS.map(sl => ({
+                label: sl.label,
+                data: sorted.map(m => getKVCacheAtSeqLen(m.result, sl.len, dtype)),
+                backgroundColor: sorted.map(m => getTypeColor(m.result, sl.opacity)),
+                borderWidth: 0
             }));
 
             if (lineChart) lineChart.destroy();
             lineChart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
+                type: 'bar',
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    indexAxis: 'y',
                     plugins: {
-                        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } },
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } },
                         tooltip: {
                             callbacks: {
-                                title: function(items) {
-                                    if (items.length > 0) {
-                                        const x = items[0].raw.x;
-                                        return (x/1024) + 'K tokens';
-                                    }
-                                    return '';
-                                },
                                 label: function(context) {
-                                    return context.dataset.label + ': ' + formatBytes(context.raw.y);
+                                    return context.dataset.label + ': ' + formatBytes(context.raw);
                                 }
                             }
                         }
@@ -961,25 +939,10 @@
                     scales: {
                         x: {
                             type: 'logarithmic',
-                            title: { display: true, text: 'Sequence Length' },
-                            min: 1024,
-                            max: 262144,
-                            ticks: { 
-                                callback: function(v) {
-                                    // 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K
-                                    const validTicks = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
-                                    if (validTicks.includes(v)) {
-                                        return (v/1024) + 'K';
-                                    }
-                                    return '';
-                                }
-                            }
-                        },
-                        y: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'KV Cache Size' },
+                            title: { display: true, text: 'KV Cache per Request' },
                             ticks: { callback: v => formatBytes(v) }
-                        }
+                        },
+                        y: { ticks: { font: { size: 10 } } }
                     }
                 }
             });
@@ -1012,61 +975,44 @@
             // Filter to models with parameter count
             const modelsWithParams = modelData.filter(m => m.config.total_params_b !== undefined);
 
-            // Sequence lengths from 1K to 256K
-            const seqLens = [];
-            for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
-
-            // Sort by KV cache at 128K descending (biggest first in legend)
-            const sorted = [...modelsWithParams].sort((a, b) =>
-                getKVCacheAtSeqLen(b.result, 131072, kvDtype) - getKVCacheAtSeqLen(a.result, 131072, kvDtype)
-            );
-
-            const datasets = sorted.map((m, idx) => {
-                const totalWeightBytes = m.config.total_params_b * 1e9 * weightBytesPerParam;
-                const weightBytesPerGpu = totalWeightBytes / numGpus;
-                const availableForKV = Math.max(0, gpuMemoryBytes - weightBytesPerGpu);
-
-                const data = seqLens.map(s => {
-                    if (availableForKV <= 0) return { x: s, y: 0 };
-                    const kvPerReq = getKVCacheAtSeqLen(m.result, s, kvDtype);
-                    const maxReqs = kvPerReq > 0 ? Math.floor(availableForKV / kvPerReq) : 0;
-                    return { x: s, y: Math.max(maxReqs, 0) };
-                });
-
-                return {
-                    label: m.name,
-                    data,
-                    borderColor: m.color,
-                    fill: false,
-                    pointRadius: 0,
-                    pointHoverRadius: 5,
-                    pointHoverBackgroundColor: m.color,
-                    borderWidth: 2,
-                    borderDash: getTypeDash(m.result)
+            // Sort by max reqs at 128K descending (most capacity at top)
+            const sorted = [...modelsWithParams].sort((a, b) => {
+                const getMaxReqs = m => {
+                    const wb = m.config.total_params_b * 1e9 * weightBytesPerParam / numGpus;
+                    const avail = Math.max(0, gpuMemoryBytes - wb);
+                    const kv = getKVCacheAtSeqLen(m.result, 131072, kvDtype);
+                    return kv > 0 ? Math.floor(avail / kv) : 0;
                 };
+                return getMaxReqs(a) - getMaxReqs(b);
             });
+
+            const labels = sorted.map(m => m.name);
+            const datasets = SEQ_LENS.map(sl => ({
+                label: sl.label,
+                data: sorted.map(m => {
+                    const wb = m.config.total_params_b * 1e9 * weightBytesPerParam / numGpus;
+                    const avail = Math.max(0, gpuMemoryBytes - wb);
+                    const kv = getKVCacheAtSeqLen(m.result, sl.len, kvDtype);
+                    return kv > 0 ? Math.max(Math.floor(avail / kv), 0) : 0;
+                }),
+                backgroundColor: sorted.map(m => getTypeColor(m.result, sl.opacity)),
+                borderWidth: 0
+            }));
 
             if (batchChart) batchChart.destroy();
             batchChart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
+                type: 'bar',
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    indexAxis: 'y',
                     plugins: {
-                        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } },
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } },
                         tooltip: {
                             callbacks: {
-                                title: function(items) {
-                                    if (items.length > 0) {
-                                        const x = items[0].raw.x;
-                                        return (x/1024) + 'K seq_len';
-                                    }
-                                    return '';
-                                },
                                 label: function(context) {
-                                    const reqs = context.raw.y;
+                                    const reqs = context.raw;
                                     if (reqs === 0) return context.dataset.label + ': does not fit';
                                     return context.dataset.label + ': ' + reqs.toLocaleString() + ' reqs';
                                 }
@@ -1075,19 +1021,6 @@
                     },
                     scales: {
                         x: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'Sequence Length' },
-                            min: 1024,
-                            max: 262144,
-                            ticks: {
-                                callback: function(v) {
-                                    const validTicks = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
-                                    if (validTicks.includes(v)) return (v/1024) + 'K';
-                                    return '';
-                                }
-                            }
-                        },
-                        y: {
                             type: 'logarithmic',
                             title: { display: true, text: 'Max Concurrent Requests' },
                             min: 1,
@@ -1099,7 +1032,8 @@
                                     return '';
                                 }
                             }
-                        }
+                        },
+                        y: { ticks: { font: { size: 10 } } }
                     }
                 }
             });
