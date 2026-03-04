@@ -300,11 +300,7 @@
                 <canvas id="batchChart"></canvas>
             </div>
             <div class="legend-note">
-                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
-                <span class="badge badge-mha">MHA</span> Multi-Head Attention |
-                <span class="badge badge-swa">SWA</span> Sliding Window |
-                <span class="badge badge-hyb">Hybrid-Lin</span> Hybrid Linear |
-                <span class="badge badge-err">—</span> Exceeds GPU capacity
+                Color = vendor. Line style: ── MHA &nbsp; ╌╌ MLA &nbsp; ·· SWA &nbsp; ─·─ Hybrid-Linear
             </div>
         </div>
 
@@ -329,10 +325,7 @@
                 </table>
             </div>
             <div class="legend-note">
-                <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
-                <span class="badge badge-mha">MHA</span> Multi-Head Attention |
-                <span class="badge badge-swa">SWA/Hybrid-SWA</span> Sliding Window |
-                <span class="badge badge-hyb">Hybrid-Lin</span> Hybrid Linear
+                Color = vendor. Line style: ── MHA &nbsp; ╌╌ MLA &nbsp; ·· SWA &nbsp; ─·─ Hybrid-Linear
             </div>
         </div>
     </div>
@@ -651,10 +644,37 @@
             return bytesPerToken * seqLen + fixed;
         }
 
-        const COLORS = [
-            '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
-            '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16'
-        ];
+        const VENDOR_COLORS = {
+            DeepSeek: '#3b82f6',
+            Moonshot: '#8b5cf6',
+            Zhipu:   '#14b8a6',
+            MiniMax: '#ec4899',
+            Alibaba: '#f97316',
+            Meta:    '#22c55e',
+            Mistral: '#ef4444',
+            OpenAI:  '#6b7280'
+        };
+
+        function getVendor(name) {
+            if (name.startsWith('DeepSeek')) return 'DeepSeek';
+            if (name.startsWith('Kimi')) return 'Moonshot';
+            if (name.startsWith('GLM')) return 'Zhipu';
+            if (name.startsWith('MiniMax')) return 'MiniMax';
+            if (name.startsWith('Qwen')) return 'Alibaba';
+            if (name.startsWith('Llama')) return 'Meta';
+            if (name.startsWith('Mistral') || name.startsWith('Mixtral')) return 'Mistral';
+            if (name.startsWith('GPT')) return 'OpenAI';
+            return 'Other';
+        }
+
+        function getTypeDash(result) {
+            if (result.hasHybridLinear) return [8, 4, 2, 4];
+            if (result.slidingWindow) return [2, 3];
+            if (result.useMLA) return [6, 3];
+            return [];
+        }
+
+        const COLORS = Object.values(VENDOR_COLORS);
 
         function initModels() {
             models = { ...BUILTIN_MODELS };
@@ -665,7 +685,9 @@
 
             const modelData = Object.entries(models).map(([name, config], index) => {
                 const result = calculateKVCache(config);
-                return { name, config, result, color: COLORS[index % COLORS.length] };
+                const vendor = getVendor(name);
+                const color = VENDOR_COLORS[vendor] || COLORS[index % COLORS.length];
+                return { name, config, result, color, vendor };
             });
 
             modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
@@ -890,11 +912,16 @@
 
         function renderLineChart(modelData, dtype) {
             const ctx = document.getElementById('lineChart').getContext('2d');
-            
+
             const seqLens = [];
             for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
 
-            const datasets = modelData.map((m, idx) => ({
+            // Sort by KV cache at 128K descending (biggest first in legend)
+            const sorted = [...modelData].sort((a, b) =>
+                getKVCacheAtSeqLen(b.result, 131072, dtype) - getKVCacheAtSeqLen(a.result, 131072, dtype)
+            );
+
+            const datasets = sorted.map((m, idx) => ({
                 label: m.name,
                 data: seqLens.map(s => ({ x: s, y: getKVCacheAtSeqLen(m.result, s, dtype) })),
                 borderColor: m.color,
@@ -903,7 +930,7 @@
                 pointHoverRadius: 5,
                 pointHoverBackgroundColor: m.color,
                 borderWidth: 2,
-                borderDash: m.result.slidingWindow ? [4, 4] : m.result.hasHybridLinear ? [8, 4] : []
+                borderDash: getTypeDash(m.result)
             }));
 
             if (lineChart) lineChart.destroy();
@@ -989,7 +1016,12 @@
             const seqLens = [];
             for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
 
-            const datasets = modelsWithParams.map((m, idx) => {
+            // Sort by KV cache at 128K descending (biggest first in legend)
+            const sorted = [...modelsWithParams].sort((a, b) =>
+                getKVCacheAtSeqLen(b.result, 131072, kvDtype) - getKVCacheAtSeqLen(a.result, 131072, kvDtype)
+            );
+
+            const datasets = sorted.map((m, idx) => {
                 const totalWeightBytes = m.config.total_params_b * 1e9 * weightBytesPerParam;
                 const weightBytesPerGpu = totalWeightBytes / numGpus;
                 const availableForKV = Math.max(0, gpuMemoryBytes - weightBytesPerGpu);
@@ -1010,7 +1042,7 @@
                     pointHoverRadius: 5,
                     pointHoverBackgroundColor: m.color,
                     borderWidth: 2,
-                    borderDash: m.result.slidingWindow ? [4, 4] : m.result.hasHybridLinear ? [8, 4] : []
+                    borderDash: getTypeDash(m.result)
                 };
             });
 
