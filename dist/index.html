@@ -95,7 +95,9 @@
 
         .heatmap { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
         .heatmap th, .heatmap td { padding: 0.4rem 0.6rem; text-align: right; border: 1px solid #e5e7eb; white-space: nowrap; }
-        .heatmap th { background: #f9f9f9; font-weight: 600; position: sticky; top: 0; }
+        .heatmap th { background: #f9f9f9; font-weight: 600; position: sticky; top: 0; cursor: pointer; user-select: none; }
+        .heatmap th:hover { background: #eef; }
+        .heatmap th .sort-arrow { font-size: 0.6rem; margin-left: 0.2rem; }
         .heatmap td:first-child { text-align: left; font-weight: 600; background: #fafafa; position: sticky; left: 0; z-index: 1; }
         .heatmap th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; }
 
@@ -906,19 +908,33 @@
             return heatColor(1 / value, 1 / max, 1 / min);
         }
 
-        function renderKVHeatmap(modelData, dtype) {
-            const sorted = [...modelData].sort((a, b) =>
-                getKVCacheAtSeqLen(a.result, 131072, dtype) - getKVCacheAtSeqLen(b.result, 131072, dtype)
-            );
+        // Sort state: { col: index into HEATMAP_SEQ_LENS (default last), asc: bool }
+        let kvSortState = { col: HEATMAP_SEQ_LENS.length - 1, asc: true };
+        let batchSortState = { col: HEATMAP_SEQ_LENS.length - 1, asc: false };
+        // Stash latest modelData/dtype so click handlers can re-render
+        let lastModelData = [], lastDtype = 'fp8';
 
-            // Compute per-column min/max for independent color scales
+        function renderKVHeatmap(modelData, dtype) {
+            lastModelData = modelData;
+            lastDtype = dtype;
+
+            const sortSeqLen = HEATMAP_SEQ_LENS[kvSortState.col];
+            const sorted = [...modelData].sort((a, b) => {
+                const va = getKVCacheAtSeqLen(a.result, sortSeqLen, dtype);
+                const vb = getKVCacheAtSeqLen(b.result, sortSeqLen, dtype);
+                return kvSortState.asc ? va - vb : vb - va;
+            });
+
             const colRanges = HEATMAP_SEQ_LENS.map(s => {
                 const vals = sorted.map(m => getKVCacheAtSeqLen(m.result, s, dtype)).filter(v => v > 0);
                 return { min: Math.min(...vals), max: Math.max(...vals) };
             });
 
             let html = '<table class="heatmap"><thead><tr><th>Model</th><th>Type</th>';
-            HEATMAP_SEQ_LABELS.forEach(l => { html += `<th>${l}</th>`; });
+            HEATMAP_SEQ_LABELS.forEach((l, i) => {
+                const arrow = i === kvSortState.col ? (kvSortState.asc ? ' ▲' : ' ▼') : '';
+                html += `<th onclick="kvSortCol(${i})">${l}<span class="sort-arrow">${arrow}</span></th>`;
+            });
             html += '</tr></thead><tbody>';
 
             sorted.forEach(m => {
@@ -940,6 +956,12 @@
             });
             html += '</tbody></table>';
             document.getElementById('kvHeatmap').innerHTML = html;
+        }
+
+        function kvSortCol(colIdx) {
+            if (kvSortState.col === colIdx) kvSortState.asc = !kvSortState.asc;
+            else { kvSortState.col = colIdx; kvSortState.asc = true; }
+            renderKVHeatmap(lastModelData, lastDtype);
         }
 
         function getBatchSliderValues() {
@@ -974,16 +996,23 @@
                 return kv > 0 ? Math.floor(avail / kv) : 0;
             }
 
-            const sorted = [...modelsWithParams].sort((a, b) => getMaxReqs(b, 131072) - getMaxReqs(a, 131072));
+            const sortSeqLen = HEATMAP_SEQ_LENS[batchSortState.col];
+            const sorted = [...modelsWithParams].sort((a, b) => {
+                const va = getMaxReqs(a, sortSeqLen);
+                const vb = getMaxReqs(b, sortSeqLen);
+                return batchSortState.asc ? va - vb : vb - va;
+            });
 
-            // Per-column min/max for independent color scales
             const colRanges = HEATMAP_SEQ_LENS.map(s => {
                 const vals = sorted.map(m => getMaxReqs(m, s)).filter(v => v > 0);
                 return { min: vals.length ? Math.min(...vals) : 1, max: vals.length ? Math.max(...vals) : 1 };
             });
 
             let html = '<table class="heatmap"><thead><tr><th>Model</th>';
-            HEATMAP_SEQ_LABELS.forEach(l => { html += `<th>${l}</th>`; });
+            HEATMAP_SEQ_LABELS.forEach((l, i) => {
+                const arrow = i === batchSortState.col ? (batchSortState.asc ? ' ▲' : ' ▼') : '';
+                html += `<th onclick="batchSortCol(${i})">${l}<span class="sort-arrow">${arrow}</span></th>`;
+            });
             html += '</tr></thead><tbody>';
 
             sorted.forEach(m => {
@@ -998,6 +1027,12 @@
             });
             html += '</tbody></table>';
             document.getElementById('batchHeatmap').innerHTML = html;
+        }
+
+        function batchSortCol(colIdx) {
+            if (batchSortState.col === colIdx) batchSortState.asc = !batchSortState.asc;
+            else { batchSortState.col = colIdx; batchSortState.asc = false; }
+            renderBatchHeatmap(lastModelData, lastDtype);
         }
 
         function renderTable(modelData) {
