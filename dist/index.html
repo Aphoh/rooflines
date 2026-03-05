@@ -93,6 +93,12 @@
 
         .table-wrap { max-height: 350px; overflow-y: auto; }
 
+        .heatmap { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .heatmap th, .heatmap td { padding: 0.4rem 0.6rem; text-align: right; border: 1px solid #e5e7eb; white-space: nowrap; }
+        .heatmap th { background: #f9f9f9; font-weight: 600; position: sticky; top: 0; }
+        .heatmap td:first-child { text-align: left; font-weight: 600; background: #fafafa; position: sticky; left: 0; z-index: 1; }
+        .heatmap th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; }
+
         .slider-controls {
             display: flex;
             gap: 2rem;
@@ -253,17 +259,16 @@
         </div>
 
         <div class="card">
-            <h2>KV Cache vs Sequence Length <button class="download-btn" onclick="downloadChart('lineChart', 'kv-vs-seqlen', 'KV Cache vs Sequence Length')">↓ PNG</button></h2>
-            <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.25rem;">Hover a line to highlight it</p>
-            <div class="chart-container">
-                <canvas id="lineChart"></canvas>
+            <h2>KV Cache per Request at Sequence Length</h2>
+            <div style="overflow-x: auto;">
+                <div id="kvHeatmap"></div>
             </div>
         </div>
 
         <div class="card">
-            <h2>Max Concurrent Requests vs Sequence Length <button class="download-btn" onclick="downloadChart('batchChart', 'max-concurrent-requests', 'Max Concurrent Requests vs Sequence Length')">↓ PNG</button></h2>
+            <h2>Max Concurrent Requests at Sequence Length</h2>
             <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.75rem;">
-                Max reqs = ⌊(GPU × 0.9 − weights/N) / (KV/tok × seq_len + fixed)⌋
+                max reqs = ⌊(GPU × 0.9 − weights/N) / (KV/tok × seq_len + fixed)⌋
             </p>
             <div class="slider-controls">
                 <div class="slider-group">
@@ -297,10 +302,9 @@
                     </select>
                 </div>
             </div>
-            <div class="chart-container">
-                <canvas id="batchChart"></canvas>
+            <div style="overflow-x: auto;">
+                <div id="batchHeatmap"></div>
             </div>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">Hover a line to highlight it</p>
         </div>
 
         <div class="card">
@@ -506,7 +510,7 @@
         const WEIGHT_BYTES = { fp16: 2, fp8: 1, nvfp4: 0.56 };
 
         let models = {};
-        let barChart, lineChart, scatterChartActive, scatterChartTotal, batchChart;
+        let barChart, scatterChartActive, scatterChartTotal;
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -664,8 +668,8 @@
             renderBarChart(modelData, dtype);
             renderScatterChart(modelData, dtype, 'active', 'scatterChartActive');
             renderScatterChart(modelData, dtype, 'total', 'scatterChartTotal');
-            renderLineChart(modelData, dtype);
-            renderBatchChart(modelData, dtype);
+            renderKVHeatmap(modelData, dtype);
+            renderBatchHeatmap(modelData, dtype);
             renderTable(modelData);
         }
 
@@ -879,92 +883,66 @@
             else scatterChartTotal = chart;
         }
 
-        function renderLineChart(modelData, dtype) {
-            const ctx = document.getElementById('lineChart').getContext('2d');
+        const HEATMAP_SEQ_LENS = [1024, 4096, 16384, 32768, 65536, 131072];
+        const HEATMAP_SEQ_LABELS = ['1K', '4K', '16K', '32K', '64K', '128K'];
 
-            const seqLens = [];
-            for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
+        // Green (low/good) -> Yellow -> Red (high/bad)
+        function heatColor(value, min, max) {
+            if (value <= 0) return '#f3f4f6';
+            const logVal = Math.log(value);
+            const logMin = Math.log(min);
+            const logMax = Math.log(max);
+            const t = Math.max(0, Math.min(1, (logVal - logMin) / (logMax - logMin)));
+            // green -> yellow -> orange -> red
+            const r = t < 0.5 ? Math.round(80 + 175 * (t * 2)) : 255;
+            const g = t < 0.5 ? 180 : Math.round(180 - 140 * ((t - 0.5) * 2));
+            const b = 60;
+            return `rgba(${r}, ${g}, ${b}, 0.25)`;
+        }
 
-            // Sort by KV at 128K descending so biggest is first in legend
+        // Inverse: Green (high/good) -> Red (low/bad)
+        function heatColorInverse(value, min, max) {
+            if (value <= 0) return '#fee2e2';
+            return heatColor(1 / value, 1 / max, 1 / min);
+        }
+
+        function renderKVHeatmap(modelData, dtype) {
+            // Sort by 128K KV ascending (most efficient first)
             const sorted = [...modelData].sort((a, b) =>
-                getKVCacheAtSeqLen(b.result, 131072, dtype) - getKVCacheAtSeqLen(a.result, 131072, dtype)
+                getKVCacheAtSeqLen(a.result, 131072, dtype) - getKVCacheAtSeqLen(b.result, 131072, dtype)
             );
 
-            const datasets = sorted.map((m, idx) => ({
-                label: m.name,
-                data: seqLens.map(s => ({ x: s, y: getKVCacheAtSeqLen(m.result, s, dtype) })),
-                borderColor: m.color,
-                backgroundColor: m.color,
-                fill: false,
-                pointRadius: 0,
-                pointHoverRadius: 6,
-                pointHoverBackgroundColor: m.color,
-                borderWidth: 2.5
-            }));
-
-            if (lineChart) lineChart.destroy();
-            lineChart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: false, axis: 'x' },
-                    plugins: {
-                        legend: { position: 'right', labels: { boxWidth: 14, font: { size: 10 }, padding: 8, usePointStyle: false } },
-                        tooltip: {
-                            callbacks: {
-                                title: function(items) {
-                                    if (items.length > 0) return (items[0].raw.x / 1024) + 'K tokens';
-                                    return '';
-                                },
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + formatBytes(context.raw.y);
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'Sequence Length' },
-                            min: 1024,
-                            max: 262144,
-                            ticks: {
-                                callback: function(v) {
-                                    const validTicks = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
-                                    if (validTicks.includes(v)) return (v / 1024) + 'K';
-                                    return '';
-                                }
-                            }
-                        },
-                        y: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'KV Cache Size' },
-                            ticks: { callback: v => formatBytes(v) }
-                        }
-                    },
-                    onHover: function(event, elements, chart) {
-                        // Dim non-hovered lines
-                        const datasets = chart.data.datasets;
-                        if (elements.length > 0) {
-                            const hoveredIdx = elements[0].datasetIndex;
-                            datasets.forEach((ds, i) => {
-                                ds.borderWidth = i === hoveredIdx ? 4 : 1.5;
-                                ds.borderColor = i === hoveredIdx
-                                    ? ds.backgroundColor
-                                    : ds.backgroundColor + '55';
-                            });
-                        } else {
-                            datasets.forEach(ds => {
-                                ds.borderWidth = 2.5;
-                                ds.borderColor = ds.backgroundColor;
-                            });
-                        }
-                        chart.update('none');
-                    }
-                }
+            // Collect all values for color scale
+            const allVals = [];
+            sorted.forEach(m => {
+                HEATMAP_SEQ_LENS.forEach(s => allVals.push(getKVCacheAtSeqLen(m.result, s, dtype)));
             });
+            const minVal = Math.min(...allVals.filter(v => v > 0));
+            const maxVal = Math.max(...allVals);
+
+            let html = '<table class="heatmap"><thead><tr><th>Model</th><th>Type</th>';
+            HEATMAP_SEQ_LABELS.forEach(l => { html += `<th>${l}</th>`; });
+            html += '</tr></thead><tbody>';
+
+            sorted.forEach(m => {
+                const r = m.result;
+                let typeClass, typeText;
+                if (r.useMLA) { typeClass = 'badge-mla'; typeText = 'MLA'; }
+                else if (r.hasHybridLinear) { typeClass = 'badge-hyb'; typeText = 'Hyb-Lin'; }
+                else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hyb-SWA'; }
+                else if (r.slidingWindow) { typeClass = 'badge-swa'; typeText = 'SWA'; }
+                else { typeClass = 'badge-mha'; typeText = 'MHA'; }
+
+                html += `<tr><td>${m.name}</td><td><span class="badge ${typeClass}">${typeText}</span></td>`;
+                HEATMAP_SEQ_LENS.forEach(s => {
+                    const val = getKVCacheAtSeqLen(m.result, s, dtype);
+                    const bg = heatColor(val, minVal, maxVal);
+                    html += `<td style="background:${bg}">${formatBytes(val)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById('kvHeatmap').innerHTML = html;
         }
 
         function getBatchSliderValues() {
@@ -985,125 +963,47 @@
             render();
         }
 
-        function renderBatchChart(modelData, kvDtype) {
-            const ctx = document.getElementById('batchChart').getContext('2d');
+        function renderBatchHeatmap(modelData, kvDtype) {
             const { gpuMemoryGB, numGpus, weightDtype } = getBatchSliderValues();
-            const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024 * 0.9; // 90% usable
+            const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024 * 0.9;
             const weightBytesPerParam = WEIGHT_BYTES[weightDtype];
 
             const modelsWithParams = modelData.filter(m => m.config.total_params_b !== undefined);
 
-            const seqLens = [];
-            for (let i = 10; i <= 18; i += 0.25) seqLens.push(Math.round(Math.pow(2, i)));
+            function getMaxReqs(m, seqLen) {
+                const wb = m.config.total_params_b * 1e9 * weightBytesPerParam / numGpus;
+                const avail = Math.max(0, gpuMemoryBytes - wb);
+                const kv = getKVCacheAtSeqLen(m.result, seqLen, kvDtype);
+                return kv > 0 ? Math.floor(avail / kv) : 0;
+            }
 
-            // Sort by max reqs at 128K descending
-            const sorted = [...modelsWithParams].sort((a, b) => {
-                const getMaxReqs = m => {
-                    const wb = m.config.total_params_b * 1e9 * weightBytesPerParam / numGpus;
-                    const avail = Math.max(0, gpuMemoryBytes - wb);
-                    const kv = getKVCacheAtSeqLen(m.result, 131072, kvDtype);
-                    return kv > 0 ? Math.floor(avail / kv) : 0;
-                };
-                return getMaxReqs(b) - getMaxReqs(a);
+            // Sort by max reqs at 128K descending (most capacity first)
+            const sorted = [...modelsWithParams].sort((a, b) => getMaxReqs(b, 131072) - getMaxReqs(a, 131072));
+
+            // Collect all values for color scale
+            const allVals = [];
+            sorted.forEach(m => {
+                HEATMAP_SEQ_LENS.forEach(s => { const v = getMaxReqs(m, s); if (v > 0) allVals.push(v); });
             });
+            const minVal = allVals.length ? Math.min(...allVals) : 1;
+            const maxVal = allVals.length ? Math.max(...allVals) : 1;
 
-            const datasets = sorted.map((m, idx) => {
-                const totalWeightBytes = m.config.total_params_b * 1e9 * weightBytesPerParam;
-                const weightBytesPerGpu = totalWeightBytes / numGpus;
-                const availableForKV = Math.max(0, gpuMemoryBytes - weightBytesPerGpu);
+            let html = '<table class="heatmap"><thead><tr><th>Model</th>';
+            HEATMAP_SEQ_LABELS.forEach(l => { html += `<th>${l}</th>`; });
+            html += '</tr></thead><tbody>';
 
-                const data = seqLens.map(s => {
-                    if (availableForKV <= 0) return { x: s, y: 0 };
-                    const kvPerReq = getKVCacheAtSeqLen(m.result, s, kvDtype);
-                    const maxReqs = kvPerReq > 0 ? Math.floor(availableForKV / kvPerReq) : 0;
-                    return { x: s, y: Math.max(maxReqs, 0) };
+            sorted.forEach(m => {
+                html += `<tr><td>${m.name}</td>`;
+                HEATMAP_SEQ_LENS.forEach(s => {
+                    const reqs = getMaxReqs(m, s);
+                    const bg = reqs === 0 ? '#fee2e2' : heatColorInverse(reqs, minVal, maxVal);
+                    const text = reqs === 0 ? '—' : reqs.toLocaleString();
+                    html += `<td style="background:${bg}">${text}</td>`;
                 });
-
-                return {
-                    label: m.name,
-                    data,
-                    borderColor: m.color,
-                    backgroundColor: m.color,
-                    fill: false,
-                    pointRadius: 0,
-                    pointHoverRadius: 6,
-                    pointHoverBackgroundColor: m.color,
-                    borderWidth: 2.5
-                };
+                html += '</tr>';
             });
-
-            if (batchChart) batchChart.destroy();
-            batchChart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: false, axis: 'x' },
-                    plugins: {
-                        legend: { position: 'right', labels: { boxWidth: 14, font: { size: 10 }, padding: 8 } },
-                        tooltip: {
-                            callbacks: {
-                                title: function(items) {
-                                    if (items.length > 0) return (items[0].raw.x / 1024) + 'K seq_len';
-                                    return '';
-                                },
-                                label: function(context) {
-                                    const reqs = context.raw.y;
-                                    if (reqs === 0) return context.dataset.label + ': does not fit';
-                                    return context.dataset.label + ': ' + reqs.toLocaleString() + ' reqs';
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'Sequence Length' },
-                            min: 1024,
-                            max: 262144,
-                            ticks: {
-                                callback: function(v) {
-                                    const validTicks = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
-                                    if (validTicks.includes(v)) return (v / 1024) + 'K';
-                                    return '';
-                                }
-                            }
-                        },
-                        y: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'Max Concurrent Requests' },
-                            min: 1,
-                            ticks: {
-                                callback: function(v) {
-                                    if ([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000].includes(v)) {
-                                        return v.toLocaleString();
-                                    }
-                                    return '';
-                                }
-                            }
-                        }
-                    },
-                    onHover: function(event, elements, chart) {
-                        const datasets = chart.data.datasets;
-                        if (elements.length > 0) {
-                            const hoveredIdx = elements[0].datasetIndex;
-                            datasets.forEach((ds, i) => {
-                                ds.borderWidth = i === hoveredIdx ? 4 : 1.5;
-                                ds.borderColor = i === hoveredIdx
-                                    ? ds.backgroundColor
-                                    : ds.backgroundColor + '55';
-                            });
-                        } else {
-                            datasets.forEach(ds => {
-                                ds.borderWidth = 2.5;
-                                ds.borderColor = ds.backgroundColor;
-                            });
-                        }
-                        chart.update('none');
-                    }
-                }
-            });
+            html += '</tbody></table>';
+            document.getElementById('batchHeatmap').innerHTML = html;
         }
 
         function renderTable(modelData) {
