@@ -907,18 +907,15 @@
         }
 
         function renderKVHeatmap(modelData, dtype) {
-            // Sort by 128K KV ascending (most efficient first)
             const sorted = [...modelData].sort((a, b) =>
                 getKVCacheAtSeqLen(a.result, 131072, dtype) - getKVCacheAtSeqLen(b.result, 131072, dtype)
             );
 
-            // Collect all values for color scale
-            const allVals = [];
-            sorted.forEach(m => {
-                HEATMAP_SEQ_LENS.forEach(s => allVals.push(getKVCacheAtSeqLen(m.result, s, dtype)));
+            // Compute per-column min/max for independent color scales
+            const colRanges = HEATMAP_SEQ_LENS.map(s => {
+                const vals = sorted.map(m => getKVCacheAtSeqLen(m.result, s, dtype)).filter(v => v > 0);
+                return { min: Math.min(...vals), max: Math.max(...vals) };
             });
-            const minVal = Math.min(...allVals.filter(v => v > 0));
-            const maxVal = Math.max(...allVals);
 
             let html = '<table class="heatmap"><thead><tr><th>Model</th><th>Type</th>';
             HEATMAP_SEQ_LABELS.forEach(l => { html += `<th>${l}</th>`; });
@@ -934,9 +931,9 @@
                 else { typeClass = 'badge-mha'; typeText = 'MHA'; }
 
                 html += `<tr><td>${m.name}</td><td><span class="badge ${typeClass}">${typeText}</span></td>`;
-                HEATMAP_SEQ_LENS.forEach(s => {
+                HEATMAP_SEQ_LENS.forEach((s, ci) => {
                     const val = getKVCacheAtSeqLen(m.result, s, dtype);
-                    const bg = heatColor(val, minVal, maxVal);
+                    const bg = heatColor(val, colRanges[ci].min, colRanges[ci].max);
                     html += `<td style="background:${bg}">${formatBytes(val)}</td>`;
                 });
                 html += '</tr>';
@@ -977,16 +974,13 @@
                 return kv > 0 ? Math.floor(avail / kv) : 0;
             }
 
-            // Sort by max reqs at 128K descending (most capacity first)
             const sorted = [...modelsWithParams].sort((a, b) => getMaxReqs(b, 131072) - getMaxReqs(a, 131072));
 
-            // Collect all values for color scale
-            const allVals = [];
-            sorted.forEach(m => {
-                HEATMAP_SEQ_LENS.forEach(s => { const v = getMaxReqs(m, s); if (v > 0) allVals.push(v); });
+            // Per-column min/max for independent color scales
+            const colRanges = HEATMAP_SEQ_LENS.map(s => {
+                const vals = sorted.map(m => getMaxReqs(m, s)).filter(v => v > 0);
+                return { min: vals.length ? Math.min(...vals) : 1, max: vals.length ? Math.max(...vals) : 1 };
             });
-            const minVal = allVals.length ? Math.min(...allVals) : 1;
-            const maxVal = allVals.length ? Math.max(...allVals) : 1;
 
             let html = '<table class="heatmap"><thead><tr><th>Model</th>';
             HEATMAP_SEQ_LABELS.forEach(l => { html += `<th>${l}</th>`; });
@@ -994,9 +988,9 @@
 
             sorted.forEach(m => {
                 html += `<tr><td>${m.name}</td>`;
-                HEATMAP_SEQ_LENS.forEach(s => {
+                HEATMAP_SEQ_LENS.forEach((s, ci) => {
                     const reqs = getMaxReqs(m, s);
-                    const bg = reqs === 0 ? '#fee2e2' : heatColorInverse(reqs, minVal, maxVal);
+                    const bg = reqs === 0 ? '#fee2e2' : heatColorInverse(reqs, colRanges[ci].min, colRanges[ci].max);
                     const text = reqs === 0 ? '—' : reqs.toLocaleString();
                     html += `<td style="background:${bg}">${text}</td>`;
                 });
