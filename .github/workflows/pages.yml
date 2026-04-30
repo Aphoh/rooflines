@@ -8,7 +8,35 @@ on:
   pull_request:
 
 jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: typst-community/setup-typst@v4
+
+      - name: Test
+        run: bun test
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Build site
+        run: bun run build
+
+      - name: Upload artifact
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
   deploy:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: build
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -20,17 +48,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'dist'
-
       - name: Deploy to GitHub Pages
         id: deployment
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: actions/deploy-pages@v4

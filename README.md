@@ -2,7 +2,7 @@
 
 A static inference roofline tool for KV-cache capacity and benchmark overlays.
 
-The app is built from TypeScript and generated JSON. It can optionally pull Artificial Analysis benchmark data at build time, then ships only static files from `dist/`.
+The app is built from TypeScript and generated JSON. It can optionally pull Artificial Analysis benchmark data at build time, then ships static files from the generated `dist/` directory.
 
 ## Features
 
@@ -19,12 +19,14 @@ The app is built from TypeScript and generated JSON. It can optionally pull Arti
 bun run build
 ```
 
-This runs `build.sh`, which:
+This runs `scripts/build.ts`, which:
 
 - builds `dist/data/models.json` from `data/models.manual.json` and optional `data/aa-cache.json`
 - bundles `src/app.ts` to `dist/assets/app.js`
 - copies `index.html` to `dist/index.html`
 - compiles Typst posts into `dist/posts/`
+
+`dist/` is generated output and is not checked in.
 
 ## Artificial Analysis Data
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KV Cache Calculator - a web tool that compares KV cache memory requirements across LLM models. Deployed to GitHub Pages from `dist/`. Also supports blog posts written in Typst.
+KV Cache Calculator - a web tool that compares KV cache memory requirements across LLM models. GitHub Pages builds `dist/` in CI from TypeScript/data/Typst sources before deploy. Also supports blog posts written in Typst.
 
 ## Commands
 
@@ -50,9 +50,9 @@ rooflines/
 ├── data/                     # Manual model data and optional AA cache
 ├── posts/                    # Typst source files for blog posts
 │   └── .gitkeep
-├── build.sh                  # Build script: builds data/app, compiles posts, assembles dist/
+├── scripts/build.ts          # Build script: builds data/app, compiles posts, assembles dist/
 ├── .pre-commit-config.yaml   # prek config (runs build on commit)
-├── dist/                     # Built output (committed, deployed to GitHub Pages)
+├── dist/                     # Generated output (ignored, deployed by GitHub Pages workflow)
 │   ├── index.html            # Calculator with post links injected
 │   ├── assets/app.js         # Bundled TypeScript app
 │   ├── data/models.json      # Generated static data
@@ -63,7 +63,7 @@ rooflines/
 
 ## Build Process
 
-`build.sh` does the following:
+`scripts/build.ts` does the following:
 1. Cleans and creates `dist/`, `dist/assets/`, `dist/data/`, and `dist/posts/`
 2. Runs `bun run build:data` to combine manual architecture data with optional Artificial Analysis cache
 3. Bundles `src/app.ts` to `dist/assets/app.js`
@@ -73,16 +73,16 @@ rooflines/
    - Compiles to SVG at two widths: desktop (500pt, 40pt margins) and mobile (350pt, 20pt margins), both with `height: auto`
    - Embeds both SVGs inline in an HTML wrapper with CSS media queries — desktop shown above 600px, mobile at 600px and below
 6. Generates HTML post links and replaces `<!-- POSTS_LIST -->` in `dist/index.html`
-7. Runs `git add dist/` to stage built files
-
 Posts are rendered as SVG (not typst HTML export) so that math and all typst features work correctly. The dual-width approach handles responsive layout: each width gets its own SVG with appropriate text reflow, and CSS swaps between them.
 
-A prek pre-commit hook runs `build.sh` automatically when `.html` or `.typ` files change.
+`dist/` is generated output and is ignored by git. The GitHub Pages workflow installs Bun and Typst, runs tests/typecheck, runs `bun run build`, uploads `dist/`, and deploys that artifact.
+
+A prek pre-commit hook runs `bun run build` automatically when site source files change.
 
 ## Adding a Blog Post
 
 1. Create `posts/my-post.typ` with a `= Title` heading (the first `= ` heading becomes the page title)
-2. Run `bash build.sh` (or just commit — the pre-commit hook will run it)
+2. Run `bun run build` (or just commit — the pre-commit hook will run it)
 3. The post appears at `dist/posts/my-post.html` and is linked from the index
 4. Write standard typst — math, figures, etc. all work since output is SVG
 
