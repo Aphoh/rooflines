@@ -10,20 +10,26 @@ KV Cache Calculator - a web tool that compares KV cache memory requirements acro
 
 **Run locally:**
 ```bash
-open dist/index.html
-# Or with a server:
-cd dist && python3 -m http.server 8080
+bun run serve
 ```
 
 **Build:**
 ```bash
-bash build.sh    # Compiles posts, assembles dist/
+bun run build    # Builds data, bundles TS, compiles posts, assembles dist/
+```
+
+**Fetch Artificial Analysis cache:**
+```bash
+cp .env.example .env
+# set ARTIFICIAL_ANALYSIS_API_KEY in .env
+bun run fetch-aa
+bun run build
 ```
 
 **Run tests:**
 ```bash
-python3 test.py    # Python test suite with verification
-node test.js       # Node.js test suite
+bun test
+bunx tsc --noEmit
 ```
 
 **Python scripts (sympy, etc.):**
@@ -38,29 +44,36 @@ node test.js       # Node.js test suite
 
 ```
 rooflines/
-├── index.html                # Source calculator page (has <!-- POSTS_LIST --> placeholder)
+├── index.html                # Static app shell (has <!-- POSTS_LIST --> placeholder)
+├── src/                      # TypeScript browser app and shared math
+├── scripts/                  # Build-time TypeScript scripts
+├── data/                     # Manual model data and optional AA cache
 ├── posts/                    # Typst source files for blog posts
 │   └── .gitkeep
-├── build.sh                  # Build script: compiles posts, assembles dist/
+├── build.sh                  # Build script: builds data/app, compiles posts, assembles dist/
 ├── .pre-commit-config.yaml   # prek config (runs build on commit)
 ├── dist/                     # Built output (committed, deployed to GitHub Pages)
 │   ├── index.html            # Calculator with post links injected
+│   ├── assets/app.js         # Bundled TypeScript app
+│   ├── data/models.json      # Generated static data
 │   └── posts/                # Compiled typst HTML wrapped with site chrome
-├── test.py, test.js
+├── src/kv.test.ts
 └── .github/workflows/pages.yml
 ```
 
 ## Build Process
 
 `build.sh` does the following:
-1. Cleans and creates `dist/` and `dist/posts/`
-2. Copies `index.html` to `dist/index.html`
-3. For each `posts/*.typ` file:
+1. Cleans and creates `dist/`, `dist/assets/`, `dist/data/`, and `dist/posts/`
+2. Runs `bun run build:data` to combine manual architecture data with optional Artificial Analysis cache
+3. Bundles `src/app.ts` to `dist/assets/app.js`
+4. Copies `index.html` to `dist/index.html`
+5. For each `posts/*.typ` file:
    - Creates two temp typst wrappers in `posts/` that `#include` the original with different page widths
    - Compiles to SVG at two widths: desktop (500pt, 40pt margins) and mobile (350pt, 20pt margins), both with `height: auto`
    - Embeds both SVGs inline in an HTML wrapper with CSS media queries — desktop shown above 600px, mobile at 600px and below
-4. Generates HTML post links and replaces `<!-- POSTS_LIST -->` in `dist/index.html`
-5. Runs `git add dist/` to stage built files
+6. Generates HTML post links and replaces `<!-- POSTS_LIST -->` in `dist/index.html`
+7. Runs `git add dist/` to stage built files
 
 Posts are rendered as SVG (not typst HTML export) so that math and all typst features work correctly. The dual-width approach handles responsive layout: each width gets its own SVG with appropriate text reflow, and CSS swaps between them.
 
@@ -75,7 +88,7 @@ A prek pre-commit hook runs `build.sh` automatically when `.html` or `.typ` file
 
 ## Architecture
 
-The calculator is a self-contained single-file web application (`index.html`) with all JavaScript embedded. `dist/` is the deployable output.
+The calculator is a static TypeScript web application. `index.html` is the shell, `src/app.ts` owns rendering, `src/kv.ts` owns KV and capacity math, and `dist/` is the deployable output.
 
 ### Key Concepts
 
@@ -84,20 +97,23 @@ The calculator is a self-contained single-file web application (`index.html`) wi
 - **MLA (Multi-head Latent Attention):** Compressed KV cache (DeepSeek, Kimi) - `layers × (kv_lora_rank + qk_rope_head_dim) × bytes`
 - **SWA (Sliding Window Attention):** Memory bounded at window size (Mistral, Gemma)
 - **Hybrid-SWA:** Mix of full and sliding attention layers (GPT-OSS) - some layers grow with sequence length, others bounded
+- **Hybrid-Linear:** Mix of full attention and linear recurrent state layers
 
 **Detection Logic:**
 - MLA: config has `kv_lora_rank` OR architecture in `MLA_ARCHITECTURES` list
 - SWA: config has `sliding_window` AND `use_sliding_window !== false`
 - Hybrid: config has `layer_types` array with mix of `"full_attention"` and `"sliding_attention"`
+- Capacity assumes weights and KV/state are perfectly sharded across the selected GPU count.
 
 ### Code Structure
 
-- `BUILTIN_MODELS` - Pre-loaded model configurations with architecture parameters
-- `calculateKVCache(config)` - Core calculation returning bytes/token for bf16/fp8
-- `getKVCacheAtSeqLen(result, seqLen, dtype)` - Memory at specific sequence length (handles SWA bounding)
-- Four Chart.js visualizations: bar chart, scatter plot (size vs KV), line chart (seq length scaling), requests chart
-- Models are defined in `BUILTIN_MODELS` (no custom model UI)
+- `data/models.manual.json` - Curated model architecture parameters and Artificial Analysis aliases
+- `data/aa-cache.json` - Optional cached Artificial Analysis API response, generated by `bun run fetch-aa`
+- `scripts/build-data.ts` - Joins manual model data with AA cache and emits `dist/data/models.json`
+- `scripts/fetch-aa.ts` - Fetches `GET /api/v2/data/llms/models` with `ARTIFICIAL_ANALYSIS_API_KEY`
+- `src/kv.ts` - Core KV and sharded capacity math
+- `src/app.ts` - Chart.js rendering and UI event handling
 
 ### Test Files
 
-`test.py` and `test.js` contain the same calculation logic with expected values for verification. The Python tests include `EXPECTED` dict with manually computed values to catch regressions.
+`src/kv.test.ts` covers KV-cache math and the sharded capacity model. Older `test.py` and `test.js` are retained for reference but are no longer the primary app test path.

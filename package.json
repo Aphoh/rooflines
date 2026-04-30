@@ -1,0 +1,13 @@
+{
+  "name": "rooflines",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash build.sh",
+    "build:app": "bun build src/app.ts --outdir dist/assets --target browser --format esm",
+    "build:data": "bun scripts/build-data.ts",
+    "fetch-aa": "bun scripts/fetch-aa.ts",
+    "serve": "bun scripts/serve-dist.ts",
+    "test": "bun test"
+  }
+}

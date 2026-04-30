@@ -17,9 +17,10 @@
         }
 
         .container { max-width: 1200px; margin: 0 auto; }
-
         h1 { font-size: 1.5rem; margin-bottom: 1rem; }
         h2 { font-size: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
+        h3 { font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 600; }
+        a { color: #4f46e5; }
 
         .card {
             background: white;
@@ -28,109 +29,50 @@
             margin-bottom: 1rem;
         }
 
-        .chart-container { height: 400px; }
+        .controls,
+        .slider-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: end;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+        }
 
-        table {
+        .control-group,
+        .slider-group {
+            min-width: 150px;
+            flex: 1;
+        }
+
+        .control-group.compact,
+        .slider-group.compact {
+            max-width: 180px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            margin-bottom: 0.35rem;
+        }
+
+        input,
+        select {
             width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-
-        th, td {
-            padding: 0.5rem;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        th { font-weight: 600; background: #f9f9f9; }
-
-        .badge {
-            padding: 0.15rem 0.4rem;
-            border-radius: 3px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-
-        .badge-mla { background: #e9d5ff; color: #7c3aed; }
-        .badge-mha { background: #d1fae5; color: #059669; }
-        .badge-swa { background: #fef3c7; color: #d97706; }
-        .badge-err { background: #fee2e2; color: #dc2626; }
-        .badge-hyb { background: #dbeafe; color: #2563eb; }
-
-        input, select {
             padding: 0.4rem;
             border: 1px solid #ccc;
             border-radius: 3px;
             font-size: 0.85rem;
-            width: 100%;
-        }
-
-        button {
-            padding: 0.4rem 0.8rem;
-            background: #4f46e5;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            font-size: 0.85rem;
-            cursor: pointer;
-        }
-
-        button:hover { background: #4338ca; }
-        .controls {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-
-        .controls select { width: auto; }
-
-        .legend-note {
-            font-size: 0.75rem;
-            color: #666;
-            margin-top: 0.5rem;
-        }
-
-        .table-wrap { max-height: 350px; overflow-y: auto; }
-
-        .heatmap { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-        .heatmap th, .heatmap td { padding: 0.4rem 0.6rem; text-align: right; border: 1px solid #e5e7eb; white-space: nowrap; }
-        .heatmap th { background: #f9f9f9; font-weight: 600; position: sticky; top: 0; cursor: pointer; user-select: none; }
-        .heatmap th:hover { background: #eef; }
-        .heatmap th .sort-arrow { font-size: 0.6rem; margin-left: 0.2rem; }
-        .heatmap td:first-child { text-align: left; font-weight: 600; background: #fafafa; position: sticky; left: 0; z-index: 1; }
-        .heatmap th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; }
-
-        .slider-controls {
-            display: flex;
-            gap: 2rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .slider-group {
-            flex: 1;
-            min-width: 200px;
-        }
-
-        .slider-group label {
-            display: block;
-            font-size: 0.85rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .slider-group label span {
-            font-weight: 600;
+            background: white;
         }
 
         input[type="range"] {
-            width: 100%;
             height: 6px;
             -webkit-appearance: none;
             appearance: none;
             background: #ddd;
             border-radius: 3px;
             outline: none;
+            padding: 0;
         }
 
         input[type="range"]::-webkit-slider-thumb {
@@ -152,7 +94,27 @@
             border: none;
         }
 
-        .preset-btn {
+        button {
+            padding: 0.4rem 0.8rem;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        button:hover { background: #4338ca; }
+
+        .preset-row {
+            display: flex;
+            gap: 0.35rem;
+            margin-top: 0.35rem;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn,
+        .download-btn {
             padding: 0.15rem 0.4rem;
             font-size: 0.7rem;
             background: #e5e7eb;
@@ -160,24 +122,21 @@
             border: 1px solid #d1d5db;
         }
 
-        .preset-btn:hover {
-            background: #d1d5db;
-        }
-
         .download-btn {
-            padding: 0.15rem 0.4rem;
             font-size: 0.65rem;
-            background: #f3f4f6;
-            color: #6b7280;
-            border: 1px solid #d1d5db;
             margin-left: 0.5rem;
             vertical-align: middle;
         }
 
+        .preset-btn:hover,
         .download-btn:hover {
-            background: #e5e7eb;
-            color: #374151;
+            background: #d1d5db;
+            color: #111827;
         }
+
+        .chart-container { height: 400px; }
+        .chart-container-half { height: 350px; }
+        .chart-container-tall { height: 480px; }
 
         .scatter-row {
             display: flex;
@@ -190,20 +149,86 @@
             min-width: 300px;
         }
 
-        .scatter-col h3 {
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
         }
 
-        .chart-container-half {
-            height: 350px;
+        th,
+        td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            font-weight: 600;
+            background: #f9f9f9;
+        }
+
+        .table-wrap {
+            max-height: 420px;
+            overflow: auto;
+        }
+
+        .heatmap {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .heatmap th,
+        .heatmap td {
+            padding: 0.4rem 0.6rem;
+            text-align: right;
+            border: 1px solid #e5e7eb;
+            white-space: nowrap;
+        }
+
+        .heatmap th {
+            background: #f9f9f9;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .heatmap th:hover { background: #eef; }
+        .heatmap th .sort-arrow { font-size: 0.6rem; margin-left: 0.2rem; }
+        .heatmap td:first-child { text-align: left; font-weight: 600; background: #fafafa; position: sticky; left: 0; z-index: 1; }
+        .heatmap th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; }
+
+        .badge {
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .badge-mla { background: #e9d5ff; color: #7c3aed; }
+        .badge-mha { background: #d1fae5; color: #059669; }
+        .badge-swa { background: #fef3c7; color: #d97706; }
+        .badge-hyb { background: #dbeafe; color: #2563eb; }
+
+        .legend-note,
+        .status,
+        .formula,
+        .muted {
+            font-size: 0.75rem;
+            color: #666;
+        }
+
+        .formula,
+        .status {
+            margin-bottom: 0.75rem;
         }
 
         @media (max-width: 700px) {
-            .scatter-col {
-                min-width: 100%;
-            }
+            .scatter-col { min-width: 100%; }
+            .control-group.compact,
+            .slider-group.compact { max-width: none; }
         }
     </style>
 </head>
@@ -222,37 +247,92 @@
 
         <div class="card">
             <div class="controls">
-                <label>Data Type:</label>
-                <select id="dtype">
-                    <option value="bf16">BF16</option>
-                    <option value="fp8" selected>FP8</option>
-                </select>
+                <div class="control-group compact">
+                    <label for="dtype">KV Data Type</label>
+                    <select id="dtype">
+                        <option value="bf16">BF16</option>
+                        <option value="fp8" selected>FP8</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="benchmark-seq-len">Benchmark Seq Len: <span id="benchmark-seq-len-value">131,072</span></label>
+                    <input type="number" id="benchmark-seq-len" min="1" step="1024" value="131072">
+                    <div class="preset-row">
+                        <button type="button" class="preset-btn" onclick="setBenchmarkSeqLen(32768)">32K</button>
+                        <button type="button" class="preset-btn" onclick="setBenchmarkSeqLen(100000)">100K</button>
+                        <button type="button" class="preset-btn" onclick="setBenchmarkSeqLen(131072)">128K</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="batch-gpu-memory">GPU Memory: <span id="batch-gpu-memory-value">192 GB</span></label>
+                    <input type="range" id="batch-gpu-memory" min="1" max="280" value="192">
+                    <div class="preset-row">
+                        <button type="button" class="preset-btn" onclick="setGpuMemory(80)">80</button>
+                        <button type="button" class="preset-btn" onclick="setGpuMemory(192)">192</button>
+                        <button type="button" class="preset-btn" onclick="setGpuMemory(280)">280</button>
+                    </div>
+                </div>
+                <div class="control-group compact">
+                    <label for="num-gpus">Sharded GPUs</label>
+                    <select id="num-gpus">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="4">4</option>
+                        <option value="8" selected>8</option>
+                        <option value="16">16</option>
+                        <option value="32">32</option>
+                        <option value="64">64</option>
+                    </select>
+                </div>
+                <div class="control-group compact">
+                    <label for="weight-dtype">Weight Precision</label>
+                    <select id="weight-dtype">
+                        <option value="fp16">FP16 (2B/param)</option>
+                        <option value="fp8">FP8 (1B/param)</option>
+                        <option value="nvfp4" selected>NVFP4 (~0.56B/param)</option>
+                    </select>
+                </div>
+            </div>
+            <p class="formula">
+                Capacity assumes weights and KV/state are perfectly sharded across the selected GPUs:
+                max reqs = floor((GPU memory * 0.9 - weights / N) / (request KV+state / N)).
+            </p>
+            <p id="data-status" class="status">Loading generated data...</p>
+            <p id="aa-attribution" class="status"></p>
+        </div>
+
+        <div class="card">
+            <h2>Intelligence vs Max Concurrent Requests <button class="download-btn" onclick="downloadChart('benchmarkChart', 'intelligence-vs-max-reqs', 'Intelligence vs Max Concurrent Requests')">PNG</button></h2>
+            <p id="benchmark-status" class="status"></p>
+            <div class="chart-container-tall">
+                <canvas id="benchmarkChart"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <h2>KV Cache Bytes per Token <button class="download-btn" onclick="downloadChart('barChart', 'kv-bytes-per-token', 'KV Cache Bytes per Token')">↓ PNG</button></h2>
+            <h2>Effective KV Cache Bytes per Token @100K <button class="download-btn" onclick="downloadChart('barChart', 'effective-kv-bytes-per-token-100k', 'Effective KV Cache Bytes per Token @100K')">PNG</button></h2>
             <div class="chart-container">
                 <canvas id="barChart"></canvas>
             </div>
             <div class="legend-note">
                 <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
                 <span class="badge badge-mha">MHA</span> Multi-Head Attention |
-                <span class="badge badge-swa">SWA</span> Sliding Window
+                <span class="badge badge-swa">SWA</span> Sliding Window.
+                Effective bytes/token is request KV/state at 100K tokens divided by 100K.
             </div>
         </div>
 
         <div class="card">
-            <h2>Model Size vs KV Cache Bytes per Token</h2>
+            <h2>Model Size vs Effective KV Cache Bytes per Token @100K</h2>
             <div class="scatter-row">
                 <div class="scatter-col">
-                    <h3>Active Parameters <button class="download-btn" onclick="downloadChart('scatterChartActive', 'active-params-vs-kv', 'Active Parameters vs KV Cache Bytes per Token')">↓ PNG</button></h3>
+                    <h3>Active Parameters <button class="download-btn" onclick="downloadChart('scatterChartActive', 'active-params-vs-effective-kv-100k', 'Active Parameters vs Effective KV Cache Bytes per Token @100K')">PNG</button></h3>
                     <div class="chart-container-half">
                         <canvas id="scatterChartActive"></canvas>
                     </div>
                 </div>
                 <div class="scatter-col">
-                    <h3>Total Parameters <button class="download-btn" onclick="downloadChart('scatterChartTotal', 'total-params-vs-kv', 'Total Parameters vs KV Cache Bytes per Token')">↓ PNG</button></h3>
+                    <h3>Total Parameters <button class="download-btn" onclick="downloadChart('scatterChartTotal', 'total-params-vs-effective-kv-100k', 'Total Parameters vs Effective KV Cache Bytes per Token @100K')">PNG</button></h3>
                     <div class="chart-container-half">
                         <canvas id="scatterChartTotal"></canvas>
                     </div>
@@ -269,41 +349,6 @@
 
         <div class="card">
             <h2>Max Concurrent Requests at Sequence Length</h2>
-            <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.75rem;">
-                max reqs = ⌊(GPU × 0.9 − weights/N) / (KV/tok × seq_len + fixed)⌋
-            </p>
-            <div class="slider-controls">
-                <div class="slider-group">
-                    <label>GPU Memory: <span id="batch-gpu-memory-value">192 GB</span>
-                        <span style="margin-left: 0.5rem;">
-                            <button type="button" class="preset-btn" onclick="setGpuMemory(80)">80</button>
-                            <button type="button" class="preset-btn" onclick="setGpuMemory(192)">192</button>
-                            <button type="button" class="preset-btn" onclick="setGpuMemory(280)">280</button>
-                        </span>
-                    </label>
-                    <input type="range" id="batch-gpu-memory" min="1" max="280" value="192">
-                </div>
-                <div class="slider-group" style="flex: 0.5; min-width: 100px;">
-                    <label>GPUs</label>
-                    <select id="num-gpus">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="4">4</option>
-                        <option value="8" selected>8</option>
-                        <option value="16">16</option>
-                        <option value="32">32</option>
-                        <option value="64">64</option>
-                    </select>
-                </div>
-                <div class="slider-group" style="flex: 0.5; min-width: 120px;">
-                    <label>Weight Precision</label>
-                    <select id="weight-dtype">
-                        <option value="fp16">FP16 (2B/param)</option>
-                        <option value="fp8" selected>FP8 (1B/param)</option>
-                        <option value="nvfp4">NVFP4 (~0.56B/param)</option>
-                    </select>
-                </div>
-            </div>
             <div style="overflow-x: auto;">
                 <div id="batchHeatmap"></div>
             </div>
@@ -320,10 +365,13 @@
                             <th>Layers</th>
                             <th>KV Heads</th>
                             <th>Head Dim</th>
-                            <th>BF16 B/tok</th>
-                            <th>FP8 B/tok</th>
+                            <th>100K BF16 B/tok</th>
+                            <th>100K FP8 B/tok</th>
                             <th>128K BF16</th>
                             <th>128K FP8</th>
+                            <th>AA Intel</th>
+                            <th>Tok/s</th>
+                            <th>$/1M</th>
                         </tr>
                     </thead>
                     <tbody id="model-tbody"></tbody>
@@ -332,755 +380,6 @@
         </div>
     </div>
 
-    <script>
-        const BUILTIN_MODELS = {
-            "GPT-OSS-120B": {
-                architectures: ["GptOssForCausalLM"],
-                num_hidden_layers: 36,
-                num_attention_heads: 64,
-                num_key_value_heads: 8,
-                head_dim: 64,
-                hidden_size: 2880,
-                max_position_embeddings: 131072,
-                sliding_window: 128,
-                layer_types: ["sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention","sliding_attention","full_attention"],
-                total_params_b: 120,
-                active_params_b: 20
-            },
-            "DeepSeek-V3": {
-                architectures: ["DeepseekV3ForCausalLM"],
-                num_hidden_layers: 61,
-                kv_lora_rank: 512,
-                qk_rope_head_dim: 64,
-                num_attention_heads: 128,
-                hidden_size: 7168,
-                max_position_embeddings: 163840,
-                total_params_b: 671,
-                active_params_b: 37
-            },
-            "DeepSeek-R1": {
-                architectures: ["DeepseekV3ForCausalLM"],
-                num_hidden_layers: 61,
-                kv_lora_rank: 512,
-                qk_rope_head_dim: 64,
-                num_attention_heads: 128,
-                hidden_size: 7168,
-                max_position_embeddings: 163840,
-                total_params_b: 671,
-                active_params_b: 37
-            },
-            "Kimi-K2": {
-                architectures: ["DeepseekV3ForCausalLM"],
-                model_type: "kimi_k2",
-                num_hidden_layers: 61,
-                kv_lora_rank: 512,
-                qk_rope_head_dim: 64,
-                num_attention_heads: 64,
-                hidden_size: 7168,
-                max_position_embeddings: 131072,
-                total_params_b: 1029,
-                active_params_b: 32
-            },
-            "GLM-4.5": {
-                architectures: ["Glm4MoeForCausalLM"],
-                num_hidden_layers: 92,
-                num_attention_heads: 96,
-                num_key_value_heads: 8,
-                head_dim: 128,
-                hidden_size: 5120,
-                max_position_embeddings: 131072,
-                total_params_b: 358,
-                active_params_b: 32
-            },
-            "MiniMax-M2.1": {
-                architectures: ["MiniMaxM2ForCausalLM"],
-                num_hidden_layers: 62,
-                num_attention_heads: 48,
-                num_key_value_heads: 8,
-                head_dim: 128,
-                hidden_size: 3072,
-                max_position_embeddings: 196608,
-                total_params_b: 229,
-                active_params_b: 10
-            },
-            "Qwen3-235B-A22B": {
-                architectures: ["Qwen3MoeForCausalLM"],
-                num_hidden_layers: 94,
-                num_attention_heads: 64,
-                num_key_value_heads: 4,
-                head_dim: 128,
-                hidden_size: 4096,
-                max_position_embeddings: 40960,
-                total_params_b: 235,
-                active_params_b: 22
-            },
-            "Qwen2.5-72B": {
-                architectures: ["Qwen2ForCausalLM"],
-                num_hidden_layers: 80,
-                num_attention_heads: 64,
-                num_key_value_heads: 8,
-                head_dim: 128,
-                hidden_size: 8192,
-                max_position_embeddings: 32768,
-                sliding_window: 131072,
-                use_sliding_window: false,
-                total_params_b: 72,
-                active_params_b: 72
-            },
-            "Qwen2.5-7B": {
-                architectures: ["Qwen2ForCausalLM"],
-                num_hidden_layers: 28,
-                num_attention_heads: 28,
-                num_key_value_heads: 4,
-                head_dim: 128,
-                hidden_size: 3584,
-                max_position_embeddings: 32768,
-                total_params_b: 7,
-                active_params_b: 7
-            },
-            "Llama-3.1-70B": {
-                architectures: ["LlamaForCausalLM"],
-                num_hidden_layers: 80,
-                num_attention_heads: 64,
-                num_key_value_heads: 8,
-                head_dim: 128,
-                hidden_size: 8192,
-                max_position_embeddings: 131072,
-                total_params_b: 70,
-                active_params_b: 70
-            },
-            "Llama-3.1-8B": {
-                architectures: ["LlamaForCausalLM"],
-                num_hidden_layers: 32,
-                num_attention_heads: 32,
-                num_key_value_heads: 8,
-                head_dim: 128,
-                hidden_size: 4096,
-                max_position_embeddings: 131072,
-                total_params_b: 8,
-                active_params_b: 8
-            },
-            "GLM-5": {
-                architectures: ["GlmMoeDsaForCausalLM"],
-                num_hidden_layers: 78,
-                kv_lora_rank: 512,
-                qk_rope_head_dim: 64,
-                num_attention_heads: 64,
-                hidden_size: 6144,
-                max_position_embeddings: 202752,
-                nsa_index_bytes_per_layer: 132,
-                total_params_b: 744,
-                active_params_b: 40
-            },
-            "Qwen3.5-397B-A17B": {
-                architectures: ["Qwen3_5ForCausalLM"],
-                num_hidden_layers: 60,
-                num_attention_heads: 32,
-                num_key_value_heads: 2,
-                head_dim: 256,
-                hidden_size: 4096,
-                max_position_embeddings: 262144,
-                layer_types: ["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"],
-                linear_state_per_layer: 4268032,
-                total_params_b: 397,
-                active_params_b: 17
-            },
-            "Qwen3.5-122B-A10B": {
-                architectures: ["Qwen3_5ForCausalLM"],
-                num_hidden_layers: 48,
-                num_attention_heads: 32,
-                num_key_value_heads: 2,
-                head_dim: 256,
-                hidden_size: 3072,
-                max_position_embeddings: 262144,
-                layer_types: ["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"],
-                linear_state_per_layer: 4268032,
-                total_params_b: 122,
-                active_params_b: 10
-            }
-        };
-
-        const MLA_ARCHITECTURES = [
-            'DeepseekV2ForCausalLM', 'DeepseekV32ForCausalLM', 'DeepseekV3ForCausalLM',
-            'DeepseekV3ForCausalLMNextN', 'DeepseekVL2ForCausalLM', 'LongcatFlashForCausalLM',
-            'MistralLarge3ForCausalLM', 'PixtralForConditionalGeneration', 'MiniCPM3ForCausalLM',
-            'KimiVLForConditionalGeneration', 'KimiLinearForCausalLM',
-            'GlmMoeDsaForCausalLM'
-        ];
-
-        const BYTES_PER_DTYPE = { bf16: 2, fp8: 1 };
-        const WEIGHT_BYTES = { fp16: 2, fp8: 1, nvfp4: 0.56 };
-
-        let models = {};
-        let barChart, scatterChartActive, scatterChartTotal;
-
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        function downloadChart(canvasId, filename, title) {
-            const canvas = document.getElementById(canvasId);
-            const titleHeight = 60;
-
-            // Create a new canvas with space for title
-            const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = canvas.width;
-            exportCanvas.height = canvas.height + titleHeight;
-            const ctx = exportCanvas.getContext('2d');
-
-            // White background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-
-            // Draw title
-            ctx.fillStyle = '#333333';
-            ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(title, exportCanvas.width / 2, titleHeight - 16);
-
-            // Draw chart
-            ctx.drawImage(canvas, 0, titleHeight);
-
-            // Draw attribution
-            ctx.fillStyle = '#999999';
-            ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.textAlign = 'right';
-            ctx.fillText('roofline.cc', exportCanvas.width - 10, exportCanvas.height - 10);
-
-            const link = document.createElement('a');
-            link.download = filename + '.png';
-            link.href = exportCanvas.toDataURL('image/png');
-            link.click();
-        }
-
-        function isMLA(config) {
-            if (config.kv_lora_rank) return true;
-            return (config.architectures || []).some(a => MLA_ARCHITECTURES.includes(a));
-        }
-
-        function getSlidingWindow(config) {
-            let sw = config.sliding_window;
-            if (Array.isArray(sw)) sw = sw.find(v => v !== null);
-            if (config.use_sliding_window === false) return null;
-            return sw || null;
-        }
-
-        function calculateKVCache(config) {
-            const numLayers = config.num_hidden_layers || 32;
-            const useMLA = isMLA(config);
-            const slidingWindow = getSlidingWindow(config);
-            const layerTypes = config.layer_types || null;
-
-            let bf16, fp8, kvHeads, headDim;
-            let numFullLayers = numLayers;
-            let numSlidingLayers = 0;
-            let numLinearLayers = 0;
-
-            if (layerTypes && Array.isArray(layerTypes)) {
-                numFullLayers = layerTypes.filter(t => t === 'full_attention').length;
-                numSlidingLayers = layerTypes.filter(t => t === 'sliding_attention').length;
-                numLinearLayers = layerTypes.filter(t => t === 'linear_attention').length;
-            }
-
-            if (useMLA) {
-                const kvLoraRank = config.kv_lora_rank || 512;
-                const qkRopeHeadDim = config.qk_rope_head_dim || 64;
-                const latentDim = kvLoraRank + qkRopeHeadDim;
-                bf16 = numLayers * latentDim * BYTES_PER_DTYPE.bf16;
-                fp8 = numLayers * latentDim * BYTES_PER_DTYPE.fp8;
-                kvHeads = 1;
-                headDim = latentDim;
-            } else {
-                const numKVHeads = config.num_key_value_heads || config.num_attention_heads || 32;
-                const defaultHeadDim = config.hidden_size ? Math.floor(config.hidden_size / (config.num_attention_heads || 32)) : 128;
-                headDim = config.head_dim || defaultHeadDim;
-                const kvLayers = numLinearLayers > 0 ? numFullLayers : numLayers;
-                bf16 = 2 * kvLayers * numKVHeads * headDim * BYTES_PER_DTYPE.bf16;
-                fp8 = 2 * kvLayers * numKVHeads * headDim * BYTES_PER_DTYPE.fp8;
-                kvHeads = numKVHeads;
-            }
-
-            // NSA indexer overhead (e.g. GLM-5): always uint8, same for bf16 and fp8
-            const nsaIndexBytes = config.nsa_index_bytes_per_layer || 0;
-            bf16 += numLayers * nsaIndexBytes;
-            fp8 += numLayers * nsaIndexBytes;
-
-            // Fixed per-request cost from linear attention recurrent states
-            const fixedPerRequest = numLinearLayers > 0 && config.linear_state_per_layer
-                ? numLinearLayers * config.linear_state_per_layer : 0;
-
-            return {
-                bf16, fp8, useMLA, slidingWindow,
-                numLayers, kvHeads, headDim,
-                numFullLayers, numSlidingLayers, numLinearLayers,
-                hasHybrid: layerTypes !== null && (numSlidingLayers > 0 || numLinearLayers > 0),
-                hasHybridLinear: layerTypes !== null && numLinearLayers > 0,
-                maxCtx: config.max_position_embeddings || 32768,
-                fixedPerRequest
-            };
-        }
-
-        function getKVCacheAtSeqLen(result, seqLen, dtype) {
-            const bytesPerElement = BYTES_PER_DTYPE[dtype];
-            const fixed = result.fixedPerRequest || 0;
-
-            if (result.hasHybrid && result.slidingWindow) {
-                const bytesPerLayerPerToken = 2 * result.kvHeads * result.headDim * bytesPerElement;
-                if (seqLen <= result.slidingWindow) {
-                    return result.numLayers * bytesPerLayerPerToken * seqLen + fixed;
-                } else {
-                    const slidingContrib = result.numSlidingLayers * bytesPerLayerPerToken * result.slidingWindow;
-                    const fullContrib = result.numFullLayers * bytesPerLayerPerToken * seqLen;
-                    return slidingContrib + fullContrib + fixed;
-                }
-            }
-
-            const bytesPerToken = dtype === 'fp8' ? result.fp8 : result.bf16;
-            if (result.slidingWindow && seqLen > result.slidingWindow) {
-                return bytesPerToken * result.slidingWindow + fixed;
-            }
-            return bytesPerToken * seqLen + fixed;
-        }
-
-        const COLORS = [
-            '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
-            '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990',
-            '#dcbeff', '#9A6324', '#800000', '#aaffc3', '#808000',
-            '#000075'
-        ];
-
-        function initModels() {
-            models = { ...BUILTIN_MODELS };
-        }
-
-        function render() {
-            const dtype = document.getElementById('dtype').value;
-
-            const modelData = Object.entries(models).map(([name, config], index) => {
-                const result = calculateKVCache(config);
-                return { name, config, result, color: COLORS[index % COLORS.length] };
-            });
-
-            modelData.sort((a, b) => a.result.bf16 - b.result.bf16);
-
-            renderBarChart(modelData, dtype);
-            renderScatterChart(modelData, dtype, 'active', 'scatterChartActive');
-            renderScatterChart(modelData, dtype, 'total', 'scatterChartTotal');
-            renderKVHeatmap(modelData, dtype);
-            renderBatchHeatmap(modelData, dtype);
-            renderTable(modelData);
-        }
-
-        function renderBarChart(modelData, dtype) {
-            const ctx = document.getElementById('barChart').getContext('2d');
-            
-            if (barChart) barChart.destroy();
-            barChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: modelData.map(m => m.name),
-                    datasets: [{
-                        data: modelData.map(m => dtype === 'fp8' ? m.result.fp8 : m.result.bf16),
-                        backgroundColor: modelData.map(m => {
-                            if (m.result.useMLA) return '#c084fc';
-                            if (m.result.hasHybridLinear) return '#60a5fa';
-                            if (m.result.slidingWindow) return '#fbbf24';
-                            return '#4ade80';
-                        })
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                title: function(items) {
-                                    return items[0]?.label || '';
-                                },
-                                label: function(context) {
-                                    const m = modelData[context.dataIndex];
-                                    let label = context.raw.toLocaleString() + ' bytes/token';
-                                    if (m.result.useMLA) label += ' (MLA)';
-                                    else if (m.result.hasHybridLinear) label += ' (Hybrid-Lin)';
-                                    else if (m.result.hasHybrid) label += ' (Hybrid-SWA)';
-                                    else if (m.result.slidingWindow) label += ' (SWA)';
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { title: { display: true, text: 'Bytes/Token' } },
-                        y: { ticks: { font: { size: 10 } } }
-                    }
-                }
-            });
-        }
-
-        function renderScatterChart(modelData, dtype, paramType, canvasId) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
-
-            // Filter to models that have size data
-            const modelsWithSize = modelData.filter(m =>
-                m.config.total_params_b !== undefined && m.config.active_params_b !== undefined
-            );
-
-            const data = modelsWithSize.map(m => {
-                const params = paramType === 'total' ? m.config.total_params_b : m.config.active_params_b;
-                const bytesPerToken = dtype === 'fp8' ? m.result.fp8 : m.result.bf16;
-                return {
-                    x: params,
-                    y: bytesPerToken,
-                    name: m.name,
-                    model: m
-                };
-            });
-
-            // Destroy existing chart
-            if (paramType === 'active' && scatterChartActive) scatterChartActive.destroy();
-            if (paramType === 'total' && scatterChartTotal) scatterChartTotal.destroy();
-
-            const chart = new Chart(ctx, {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        data: data,
-                        backgroundColor: modelsWithSize.map(m => {
-                            if (m.result.useMLA) return '#c084fc';
-                            if (m.result.hasHybridLinear) return '#60a5fa';
-                            if (m.result.slidingWindow) return '#fbbf24';
-                            return '#4ade80';
-                        }),
-                        pointRadius: 8,
-                        pointHoverRadius: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: { top: 30 }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const point = context.raw;
-                                    const m = point.model;
-                                    let label = `${point.name}: ${point.x}B params, ${point.y.toLocaleString()} bytes/token`;
-                                    if (m.result.useMLA) label += ' (MLA)';
-                                    else if (m.result.hasHybridLinear) label += ' (Hybrid-Lin)';
-                                    else if (m.result.hasHybrid) label += ' (Hybrid-SWA)';
-                                    else if (m.result.slidingWindow) label += ' (SWA)';
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'logarithmic',
-                            title: { display: true, text: paramType === 'total' ? 'Total Parameters (B)' : 'Active Parameters (B)' },
-                            ticks: {
-                                callback: function(v) {
-                                    if ([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].includes(v)) {
-                                        return v + 'B';
-                                    }
-                                    return '';
-                                }
-                            }
-                        },
-                        y: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'KV Cache Bytes per Token' },
-                            ticks: { callback: v => v.toLocaleString() }
-                        }
-                    }
-                },
-                plugins: [{
-                    id: 'labelPoints',
-                    afterDatasetsDraw: function(chart) {
-                        const ctx = chart.ctx;
-                        ctx.save();
-                        ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
-                        ctx.fillStyle = '#333';
-                        
-                        // Collect all label positions
-                        const labels = [];
-                        const meta = chart.getDatasetMeta(0);
-                        
-                        chart.data.datasets[0].data.forEach((point, i) => {
-                            const element = meta.data[i];
-                            if (element) {
-                                const textWidth = ctx.measureText(point.name).width;
-                                labels.push({
-                                    name: point.name,
-                                    x: element.x,
-                                    y: element.y - 14,
-                                    width: textWidth,
-                                    height: 12,
-                                    offsetY: -14
-                                });
-                            }
-                        });
-                        
-                        // Simple collision resolution - iterate multiple times
-                        for (let iteration = 0; iteration < 10; iteration++) {
-                            for (let i = 0; i < labels.length; i++) {
-                                for (let j = i + 1; j < labels.length; j++) {
-                                    const a = labels[i];
-                                    const b = labels[j];
-                                    
-                                    // Check for overlap
-                                    const overlapX = Math.abs(a.x - b.x) < (a.width + b.width) / 2 + 4;
-                                    const overlapY = Math.abs(a.y - b.y) < (a.height + b.height) / 2 + 2;
-                                    
-                                    if (overlapX && overlapY) {
-                                        // Push labels apart vertically
-                                        if (a.y < b.y) {
-                                            a.y -= 6;
-                                            b.y += 6;
-                                        } else {
-                                            a.y += 6;
-                                            b.y -= 6;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Draw labels with leader lines if moved significantly
-                        labels.forEach((label, i) => {
-                            const element = meta.data[i];
-                            const originalY = element.y - 14;
-                            
-                            // Draw leader line if label moved
-                            if (Math.abs(label.y - originalY) > 10) {
-                                ctx.beginPath();
-                                ctx.strokeStyle = '#999';
-                                ctx.lineWidth = 0.5;
-                                ctx.moveTo(element.x, element.y - 8);
-                                ctx.lineTo(label.x, label.y + 4);
-                                ctx.stroke();
-                            }
-                            
-                            ctx.textAlign = 'center';
-                            ctx.fillText(label.name, label.x, label.y);
-                        });
-
-                        ctx.restore();
-                    }
-                }]
-            });
-
-            if (paramType === 'active') scatterChartActive = chart;
-            else scatterChartTotal = chart;
-        }
-
-        const HEATMAP_SEQ_LENS = [1024, 4096, 16384, 32768, 65536, 131072];
-        const HEATMAP_SEQ_LABELS = ['1K', '4K', '16K', '32K', '64K', '128K'];
-
-        // Green (low/good) -> Yellow -> Red (high/bad)
-        function heatColor(value, min, max) {
-            if (value <= 0) return '#f3f4f6';
-            const logVal = Math.log(value);
-            const logMin = Math.log(min);
-            const logMax = Math.log(max);
-            const t = Math.max(0, Math.min(1, (logVal - logMin) / (logMax - logMin)));
-            // green -> yellow -> orange -> red
-            const r = t < 0.5 ? Math.round(80 + 175 * (t * 2)) : 255;
-            const g = t < 0.5 ? 180 : Math.round(180 - 140 * ((t - 0.5) * 2));
-            const b = 60;
-            return `rgba(${r}, ${g}, ${b}, 0.25)`;
-        }
-
-        // Inverse: Green (high/good) -> Red (low/bad)
-        function heatColorInverse(value, min, max) {
-            if (value <= 0) return '#fee2e2';
-            return heatColor(1 / value, 1 / max, 1 / min);
-        }
-
-        // Sort state: { col: index into HEATMAP_SEQ_LENS (default last), asc: bool }
-        let kvSortState = { col: HEATMAP_SEQ_LENS.length - 1, asc: true };
-        let batchSortState = { col: HEATMAP_SEQ_LENS.length - 1, asc: false };
-        // Stash latest modelData/dtype so click handlers can re-render
-        let lastModelData = [], lastDtype = 'fp8';
-
-        function renderKVHeatmap(modelData, dtype) {
-            lastModelData = modelData;
-            lastDtype = dtype;
-
-            const sortSeqLen = HEATMAP_SEQ_LENS[kvSortState.col];
-            const sorted = [...modelData].sort((a, b) => {
-                const va = getKVCacheAtSeqLen(a.result, sortSeqLen, dtype);
-                const vb = getKVCacheAtSeqLen(b.result, sortSeqLen, dtype);
-                return kvSortState.asc ? va - vb : vb - va;
-            });
-
-            const colRanges = HEATMAP_SEQ_LENS.map(s => {
-                const vals = sorted.map(m => getKVCacheAtSeqLen(m.result, s, dtype)).filter(v => v > 0);
-                return { min: Math.min(...vals), max: Math.max(...vals) };
-            });
-
-            let html = '<table class="heatmap"><thead><tr><th>Model</th><th>Type</th>';
-            HEATMAP_SEQ_LABELS.forEach((l, i) => {
-                const arrow = i === kvSortState.col ? (kvSortState.asc ? ' ▲' : ' ▼') : '';
-                html += `<th onclick="kvSortCol(${i})">${l}<span class="sort-arrow">${arrow}</span></th>`;
-            });
-            html += '</tr></thead><tbody>';
-
-            sorted.forEach(m => {
-                const r = m.result;
-                let typeClass, typeText;
-                if (r.useMLA) { typeClass = 'badge-mla'; typeText = 'MLA'; }
-                else if (r.hasHybridLinear) { typeClass = 'badge-hyb'; typeText = 'Hyb-Lin'; }
-                else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hyb-SWA'; }
-                else if (r.slidingWindow) { typeClass = 'badge-swa'; typeText = 'SWA'; }
-                else { typeClass = 'badge-mha'; typeText = 'MHA'; }
-
-                html += `<tr><td>${m.name}</td><td><span class="badge ${typeClass}">${typeText}</span></td>`;
-                HEATMAP_SEQ_LENS.forEach((s, ci) => {
-                    const val = getKVCacheAtSeqLen(m.result, s, dtype);
-                    const bg = heatColor(val, colRanges[ci].min, colRanges[ci].max);
-                    html += `<td style="background:${bg}">${formatBytes(val)}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table>';
-            document.getElementById('kvHeatmap').innerHTML = html;
-        }
-
-        function kvSortCol(colIdx) {
-            if (kvSortState.col === colIdx) kvSortState.asc = !kvSortState.asc;
-            else { kvSortState.col = colIdx; kvSortState.asc = true; }
-            renderKVHeatmap(lastModelData, lastDtype);
-        }
-
-        function getBatchSliderValues() {
-            const gpuMemoryGB = parseInt(document.getElementById('batch-gpu-memory').value);
-            const numGpus = parseInt(document.getElementById('num-gpus').value);
-            const weightDtype = document.getElementById('weight-dtype').value;
-            return { gpuMemoryGB, numGpus, weightDtype };
-        }
-
-        function updateBatchSliderLabels() {
-            const { gpuMemoryGB } = getBatchSliderValues();
-            document.getElementById('batch-gpu-memory-value').textContent = gpuMemoryGB + ' GB';
-        }
-
-        function setGpuMemory(gb) {
-            document.getElementById('batch-gpu-memory').value = gb;
-            updateBatchSliderLabels();
-            render();
-        }
-
-        function renderBatchHeatmap(modelData, kvDtype) {
-            const { gpuMemoryGB, numGpus, weightDtype } = getBatchSliderValues();
-            const gpuMemoryBytes = gpuMemoryGB * 1024 * 1024 * 1024 * 0.9;
-            const weightBytesPerParam = WEIGHT_BYTES[weightDtype];
-
-            const modelsWithParams = modelData.filter(m => m.config.total_params_b !== undefined);
-
-            function getMaxReqs(m, seqLen) {
-                const wb = m.config.total_params_b * 1e9 * weightBytesPerParam / numGpus;
-                const avail = Math.max(0, gpuMemoryBytes - wb);
-                const kv = getKVCacheAtSeqLen(m.result, seqLen, kvDtype);
-                return kv > 0 ? Math.floor(avail / kv) : 0;
-            }
-
-            const sortSeqLen = HEATMAP_SEQ_LENS[batchSortState.col];
-            const sorted = [...modelsWithParams].sort((a, b) => {
-                const va = getMaxReqs(a, sortSeqLen);
-                const vb = getMaxReqs(b, sortSeqLen);
-                return batchSortState.asc ? va - vb : vb - va;
-            });
-
-            const colRanges = HEATMAP_SEQ_LENS.map(s => {
-                const vals = sorted.map(m => getMaxReqs(m, s)).filter(v => v > 0);
-                return { min: vals.length ? Math.min(...vals) : 1, max: vals.length ? Math.max(...vals) : 1 };
-            });
-
-            let html = '<table class="heatmap"><thead><tr><th>Model</th>';
-            HEATMAP_SEQ_LABELS.forEach((l, i) => {
-                const arrow = i === batchSortState.col ? (batchSortState.asc ? ' ▲' : ' ▼') : '';
-                html += `<th onclick="batchSortCol(${i})">${l}<span class="sort-arrow">${arrow}</span></th>`;
-            });
-            html += '</tr></thead><tbody>';
-
-            sorted.forEach(m => {
-                html += `<tr><td>${m.name}</td>`;
-                HEATMAP_SEQ_LENS.forEach((s, ci) => {
-                    const reqs = getMaxReqs(m, s);
-                    const bg = reqs === 0 ? '#fee2e2' : heatColorInverse(reqs, colRanges[ci].min, colRanges[ci].max);
-                    const text = reqs === 0 ? '—' : reqs.toLocaleString();
-                    html += `<td style="background:${bg}">${text}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table>';
-            document.getElementById('batchHeatmap').innerHTML = html;
-        }
-
-        function batchSortCol(colIdx) {
-            if (batchSortState.col === colIdx) batchSortState.asc = !batchSortState.asc;
-            else { batchSortState.col = colIdx; batchSortState.asc = false; }
-            renderBatchHeatmap(lastModelData, lastDtype);
-        }
-
-        function renderTable(modelData) {
-            const tbody = document.getElementById('model-tbody');
-            const ctx128k = 131072;
-
-            tbody.innerHTML = modelData.map(m => {
-                const r = m.result;
-
-                let typeClass, typeText;
-                if (r.useMLA) { typeClass = 'badge-mla'; typeText = 'MLA'; }
-                else if (r.hasHybridLinear) { typeClass = 'badge-hyb'; typeText = 'Hybrid-Lin'; }
-                else if (r.hasHybrid) { typeClass = 'badge-swa'; typeText = 'Hybrid-SWA'; }
-                else if (r.slidingWindow) { typeClass = 'badge-swa'; typeText = 'SWA'; }
-                else { typeClass = 'badge-mha'; typeText = 'MHA'; }
-
-                const bf16At128k = getKVCacheAtSeqLen(r, ctx128k, 'bf16');
-                const fp8At128k = getKVCacheAtSeqLen(r, ctx128k, 'fp8');
-
-                let layersInfo = r.numLayers;
-                if (r.hasHybridLinear) layersInfo = `${r.numFullLayers}F+${r.numLinearLayers}L`;
-                else if (r.hasHybrid) layersInfo = `${r.numFullLayers}F+${r.numSlidingLayers}S`;
-
-                const bounded = r.slidingWindow && ctx128k > r.slidingWindow;
-                const fixedNote = r.fixedPerRequest > 0 ? ` <span style="color:#666;font-size:0.7rem">+${formatBytes(r.fixedPerRequest)}/req</span>` : '';
-
-                return `<tr>
-                    <td><strong>${m.name}</strong>${fixedNote}</td>
-                    <td><span class="badge ${typeClass}">${typeText}</span></td>
-                    <td>${layersInfo}</td>
-                    <td>${r.useMLA ? '-' : r.kvHeads}</td>
-                    <td>${r.headDim}</td>
-                    <td>${r.bf16.toLocaleString()}</td>
-                    <td>${r.fp8.toLocaleString()}</td>
-                    <td>${formatBytes(bf16At128k)}${bounded ? '*' : ''}</td>
-                    <td>${formatBytes(fp8At128k)}${bounded ? '*' : ''}</td>
-                </tr>`;
-            }).join('');
-        }
-
-        document.getElementById('dtype').addEventListener('change', render);
-        document.getElementById('batch-gpu-memory').addEventListener('input', () => { updateBatchSliderLabels(); render(); });
-        document.getElementById('num-gpus').addEventListener('change', render);
-        document.getElementById('weight-dtype').addEventListener('change', render);
-
-        initModels();
-        updateBatchSliderLabels();
-        render();
-    </script>
+    <script type="module" src="assets/app.js"></script>
 </body>
 </html>

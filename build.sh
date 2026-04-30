@@ -34,7 +34,11 @@ done
 build_once() {
     # Clean and create output directories
     rm -rf "$DIST"
-    mkdir -p "$DIST/posts"
+    mkdir -p "$DIST/posts" "$DIST/assets" "$DIST/data"
+
+    # Build generated data and browser TypeScript
+    (cd "$ROOT" && bun run build:data)
+    bun build "$ROOT/src/app.ts" --outdir "$DIST/assets" --target browser --format esm
 
     # Copy source index.html to dist
     cp "$ROOT/index.html" "$DIST/index.html"
