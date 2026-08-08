@@ -55,6 +55,9 @@ function wrapPostHtml(title: string, desktopSvg: string, mobileSvg: string): str
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapedTitle}</title>
+    <meta name="description" content="${escapedTitle} — an inference roofline calculation by Will Arnold.">
+    <meta name="robots" content="index, follow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; media-src 'self'; upgrade-insecure-requests">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {

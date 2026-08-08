@@ -16,6 +16,7 @@ The app is built from TypeScript and generated JSON. It can optionally pull Arti
 ## Build
 
 ```bash
+bun install --frozen-lockfile
 bun run build
 ```
 
@@ -44,6 +45,7 @@ bun run build
 ## Local Development
 
 ```bash
+bun install --frozen-lockfile
 bun run build
 bun run serve
 ```

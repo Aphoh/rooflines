@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { calculateKVCache, getCapacity, getKVCacheAtSeqLen } from "./kv";
+import { BYTES_PER_DTYPE, calculateKVCache, getCapacity, getKVCacheAtSeqLen } from "./kv";
 import type { ModelArchitecture } from "./types";
 
 describe("KV cache math", () => {
@@ -99,6 +99,41 @@ describe("KV cache math", () => {
     expect(getKVCacheAtSeqLen(result, 100, "fp8")).toBe(2 * (512 + 64) * 100 + 2000);
   });
 
+  test("uses FP8 MLA pages and BF16 KDA states for Kimi K3", () => {
+    const kdaStatePerLayerBf16 =
+      (96 * 128 * 128 + (4 - 1) * 3 * 96 * 128) * BYTES_PER_DTYPE.bf16;
+    const result = calculateKVCache({
+      architectures: ["KimiK3ForConditionalGeneration"],
+      model_type: "kimi_k3",
+      num_hidden_layers: 93,
+      num_attention_heads: 96,
+      kv_lora_rank: 512,
+      qk_rope_head_dim: 64,
+      max_position_embeddings: 1048576,
+      mla_kv_dtype: "fp8",
+      layer_pattern: {
+        sequence: ["linear_attention", "linear_attention", "linear_attention", "full_attention"],
+        repeat: 23,
+        suffix: ["full_attention"],
+      },
+      linear_state_per_layer_bf16: kdaStatePerLayerBf16,
+      linear_state_per_layer_fp8: kdaStatePerLayerBf16,
+    });
+
+    expect(result).toMatchObject({
+      useMLA: true,
+      numFullLayers: 24,
+      numLinearLayers: 69,
+      bf16: 13824,
+      fp8: 13824,
+      fixedPerRequestByDtype: {
+        bf16: 232316928,
+        fp8: 232316928,
+      },
+    });
+    expect(getKVCacheAtSeqLen(result, 100000, "fp8")).toBe(1614716928);
+  });
+
   test("bounds hybrid sliding layers at the sliding window", () => {
     const result = calculateKVCache({
       num_hidden_layers: 4,
@@ -147,6 +182,35 @@ describe("KV cache math", () => {
     expect(result.vHeadDim).toBe(128);
     expect(result.fp8).toBe(70 * 8 * (192 + 128));
     expect(getKVCacheAtSeqLen(result, 131072, "fp8")).toBe(3375104000);
+  });
+
+  test("includes the K-only lightning-indexer cache for MiniMax M3 sparse layers", () => {
+    const result = calculateKVCache({
+      architectures: ["MiniMaxM3SparseForCausalLM"],
+      num_hidden_layers: 60,
+      num_attention_heads: 64,
+      num_key_value_heads: 4,
+      head_dim: 128,
+      max_position_embeddings: 1048576,
+      sparse_attention_config: {
+        sparse_index_dim: 128,
+        sparse_attention_freq: [0, 0, 0, ...Array(57).fill(1)],
+        sparse_disable_index_value: [0, 0, 0, ...Array(57).fill(1)],
+      },
+    });
+
+    expect(result.useMSA).toBe(true);
+    expect(result.miniMaxM3).toMatchObject({
+      denseLayers: 3,
+      sparseLayers: 57,
+      indexKOnlyLayers: 57,
+      indexKVLayers: 0,
+      mainCacheBytesPerToken: { bf16: 122880, fp8: 61440 },
+      indexCacheBytesPerToken: { bf16: 14592, fp8: 7296 },
+    });
+    expect(result.bf16).toBe(137472);
+    expect(result.fp8).toBe(68736);
+    expect(getKVCacheAtSeqLen(result, 131072, "bf16")).toBe(18018729984);
   });
 
   test("calculates Gemma 4 mixed full and sliding attention cache bytes", () => {

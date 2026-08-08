@@ -82,10 +82,24 @@
     }
   },
   {
-    "name": "DeepSeek-V4-Flash",
+    "name": "DeepSeek-V4-Flash-0731",
     "aa": {
       "slug": "deepseek-v4-flash",
-      "aliases": ["DeepSeek V4 Flash", "DeepSeek V4 Flash Max", "deepseek-v4-flash"]
+      "aliases": [
+        "DeepSeek V4 Flash 0731",
+        "DeepSeek-V4-Flash-0731",
+        "deepseek-v4-flash-0731"
+      ]
+    },
+    "artificialAnalysisFallback": {
+      "id": "deepseek-v4-flash-0731",
+      "name": "DeepSeek V4 Flash 0731",
+      "slug": "deepseek-v4-flash-0731",
+      "creator": {
+        "name": "DeepSeek",
+        "slug": "deepseek"
+      },
+      "intelligenceIndex": 50
     },
     "architecture": {
       "architectures": ["DeepseekV4ForCausalLM"],
@@ -229,6 +243,43 @@
     }
   },
   {
+    "name": "Kimi-K3",
+    "aa": {
+      "aliases": ["Kimi K3", "kimi-k3", "moonshotai/Kimi-K3"]
+    },
+    "artificialAnalysisFallback": {
+      "id": "kimi-k3",
+      "name": "Kimi K3",
+      "slug": "kimi-k3",
+      "creator": {
+        "name": "Kimi",
+        "slug": "kimi"
+      },
+      "intelligenceIndex": 57
+    },
+    "architecture": {
+      "architectures": ["KimiK3ForConditionalGeneration"],
+      "model_type": "kimi_k3",
+      "num_hidden_layers": 93,
+      "num_attention_heads": 96,
+      "num_key_value_heads": 96,
+      "kv_lora_rank": 512,
+      "qk_rope_head_dim": 64,
+      "hidden_size": 7168,
+      "max_position_embeddings": 1048576,
+      "mla_kv_dtype": "fp8",
+      "layer_pattern": {
+        "sequence": ["linear_attention", "linear_attention", "linear_attention", "full_attention"],
+        "repeat": 23,
+        "suffix": ["full_attention"]
+      },
+      "linear_state_per_layer_bf16": 3366912,
+      "linear_state_per_layer_fp8": 3366912,
+      "total_params_b": 2800,
+      "active_params_b": 104
+    }
+  },
+  {
     "name": "GLM-4.7",
     "aa": {
       "slug": "glm-4-7",
@@ -262,6 +313,68 @@
       "max_position_embeddings": 196608,
       "total_params_b": 229,
       "active_params_b": 10
+    }
+  },
+  {
+    "name": "MiniMax-M3",
+    "aa": {
+      "slug": "minimax-m3",
+      "aliases": [
+        "MiniMax M3",
+        "Minimax M3",
+        "minimax-m3",
+        "nvidia/MiniMax-M3-NVFP4",
+        "MiniMaxAI/MiniMax-M3"
+      ]
+    },
+    "artificialAnalysisFallback": {
+      "id": "minimax-m3",
+      "name": "MiniMax-M3",
+      "slug": "minimax-m3",
+      "creator": {
+        "name": "MiniMax",
+        "slug": "minimax"
+      },
+      "intelligenceIndex": 44,
+      "priceBlendedUsdPer1MTokens": 0.525,
+      "priceInputUsdPer1MTokens": 0.3,
+      "priceOutputUsdPer1MTokens": 1.2,
+      "medianOutputTokensPerSecond": 83.7,
+      "medianTimeToFirstTokenSeconds": 2.02
+    },
+    "architecture": {
+      "architectures": ["MiniMaxM3SparseForCausalLM"],
+      "model_type": "minimax_m3_vl",
+      "num_hidden_layers": 60,
+      "num_attention_heads": 64,
+      "num_key_value_heads": 4,
+      "head_dim": 128,
+      "hidden_size": 6144,
+      "max_position_embeddings": 1048576,
+      "sparse_attention_config": {
+        "use_sparse_attention": true,
+        "sparse_index_dim": 128,
+        "sparse_num_index_heads": 4,
+        "sparse_topk_blocks": 16,
+        "sparse_block_size": 128,
+        "sparse_disable_index_value": [
+          0, 0, 0,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        ],
+        "sparse_score_type": "max",
+        "sparse_init_block": 0,
+        "sparse_local_block": 1,
+        "sparse_attention_freq": [
+          0, 0, 0,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        ]
+      },
+      "total_params_b": 428,
+      "active_params_b": 23
     }
   },
   {

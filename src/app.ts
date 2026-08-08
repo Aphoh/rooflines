@@ -1,4 +1,5 @@
 import { escapeHtml, formatBytes, formatMetric, formatNumber } from "./format";
+import Chart from "chart.js/auto";
 import {
   calculateKVCache,
   getCapacity,
@@ -14,8 +15,6 @@ import type {
   NormalizedModel,
   WeightDtype,
 } from "./types";
-
-declare const Chart: any;
 
 interface ViewModel extends NormalizedModel {
   result: KvCacheResult;
@@ -112,6 +111,7 @@ function effectiveBytesPerToken(model: ViewModel, dtype: KvDtype, seqLen: number
 }
 
 function modelColor(model: ViewModel): string {
+  if (model.result.useMSA) return "#fb7185";
   if (model.result.useMLA) return "#c084fc";
   if (model.result.hasHybridLinear) return "#60a5fa";
   if (model.result.slidingWindow) return "#fbbf24";
@@ -379,10 +379,12 @@ function renderScatterChart(
             text: paramType === "total" ? "Total Parameters (B)" : "Active Parameters (B)",
           },
           ticks: {
-            callback: (value: number) =>
-              [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].includes(value)
-                ? `${value}B`
-                : "",
+            callback: (value: string | number) => {
+              const numericValue = Number(value);
+              return [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].includes(numericValue)
+                ? `${numericValue}B`
+                : "";
+            },
           },
         },
         y: {
@@ -391,7 +393,7 @@ function renderScatterChart(
             display: true,
             text: `Effective KV Bytes/Token at ${BYTES_PER_TOKEN_REFERENCE_SEQ_LEN.toLocaleString()}`,
           },
-          ticks: { callback: (value: number) => value.toLocaleString() },
+          ticks: { callback: (value: string | number) => Number(value).toLocaleString() },
         },
       },
     },
@@ -477,7 +479,7 @@ function renderBenchmarkChart(modelData: ViewModel[]): void {
         x: {
           type: "logarithmic",
           title: { display: true, text: "Max Concurrent Requests" },
-          ticks: { callback: (value: number) => value.toLocaleString() },
+          ticks: { callback: (value: string | number) => Number(value).toLocaleString() },
         },
         y: {
           title: { display: true, text: "Artificial Analysis Intelligence Index" },
@@ -506,7 +508,7 @@ function renderKVHeatmap(modelData: ViewModel[], dtype: KvDtype): void {
   let html = '<table class="heatmap"><thead><tr><th>Model</th><th>Type</th>';
   HEATMAP_SEQ_LABELS.forEach((label, index) => {
     const arrow = index === kvSortState.col ? (kvSortState.asc ? " ^" : " v") : "";
-    html += `<th onclick="kvSortCol(${index})">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    html += `<th scope="col"><button type="button" class="heatmap-sort" data-kv-sort-col="${index}" aria-label="Sort by ${label}">${label}<span class="sort-arrow">${arrow}</span></button></th>`;
   });
   html += "</tr></thead><tbody>";
 
@@ -558,7 +560,7 @@ function renderBatchHeatmap(modelData: ViewModel[]): void {
   let html = '<table class="heatmap"><thead><tr><th>Model</th>';
   HEATMAP_SEQ_LABELS.forEach((label, index) => {
     const arrow = index === batchSortState.col ? (batchSortState.asc ? " ^" : " v") : "";
-    html += `<th onclick="batchSortCol(${index})">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    html += `<th scope="col"><button type="button" class="heatmap-sort" data-batch-sort-col="${index}" aria-label="Sort by ${label}">${label}<span class="sort-arrow">${arrow}</span></button></th>`;
   });
   html += "</tr></thead><tbody>";
 
@@ -603,6 +605,8 @@ function renderTable(modelData: ViewModel[]): void {
       if (result.deepseekV4) {
         layersInfo = `${result.deepseekV4.c4Layers}C4+${result.deepseekV4.c128Layers}C128`;
         if (result.deepseekV4.swaOnlyLayers > 0) layersInfo += `+${result.deepseekV4.swaOnlyLayers}S`;
+      } else if (result.miniMaxM3) {
+        layersInfo = `${result.miniMaxM3.denseLayers}D+${result.miniMaxM3.sparseLayers}S`;
       } else if (result.hasHybridLinear) {
         layersInfo = `${result.numFullLayers}F+${result.numLinearLayers}L`;
         if (result.numNoAttentionLayers > 0) layersInfo += `+${result.numNoAttentionLayers}MLP`;
@@ -636,6 +640,43 @@ function renderTable(modelData: ViewModel[]): void {
     .join("");
 }
 
+function bindClickHandlers(): void {
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>("button");
+    if (!button) return;
+
+    const benchmarkSeqLen = button.dataset.benchmarkSeqLen;
+    if (benchmarkSeqLen) {
+      setBenchmarkSeqLen(Number(benchmarkSeqLen));
+      return;
+    }
+
+    const gpuMemory = button.dataset.gpuMemory;
+    if (gpuMemory) {
+      setGpuMemory(Number(gpuMemory));
+      return;
+    }
+
+    const kvSortColumn = button.dataset.kvSortCol;
+    if (kvSortColumn) {
+      kvSortCol(Number(kvSortColumn));
+      return;
+    }
+
+    const batchSortColumn = button.dataset.batchSortCol;
+    if (batchSortColumn) {
+      batchSortCol(Number(batchSortColumn));
+      return;
+    }
+
+    const canvasId = button.dataset.downloadCanvas;
+    const filename = button.dataset.downloadFilename;
+    const title = button.dataset.downloadTitle;
+    if (canvasId && filename && title) downloadChart(canvasId, filename, title);
+  });
+}
+
 async function loadDataset(): Promise<ModelsDataset> {
   const response = await fetch("data/models.json", { cache: "no-cache" });
   if (!response.ok) {
@@ -646,6 +687,7 @@ async function loadDataset(): Promise<ModelsDataset> {
 
 async function main(): Promise<void> {
   try {
+    bindClickHandlers();
     dataset = await loadDataset();
     const defaults = dataset.defaults;
     getEl<HTMLSelectElement>("dtype").value = defaults.kvDtype;
@@ -673,11 +715,5 @@ async function main(): Promise<void> {
       `${message}. Run bun run build and serve dist/ over HTTP for local testing.`;
   }
 }
-
-(window as any).downloadChart = downloadChart;
-(window as any).setGpuMemory = setGpuMemory;
-(window as any).setBenchmarkSeqLen = setBenchmarkSeqLen;
-(window as any).kvSortCol = kvSortCol;
-(window as any).batchSortCol = batchSortCol;
 
 void main();

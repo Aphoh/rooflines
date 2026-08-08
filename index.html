@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Will's Inference Calculations</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Inference Roofline Calculations | Will Arnold</title>
+    <meta name="description" content="Interactive inference roofline calculations for KV-cache capacity, model architecture, and serving throughput.">
+    <meta name="author" content="Will Arnold">
+    <meta name="robots" content="index, follow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; media-src 'self'; upgrade-insecure-requests">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -167,9 +170,33 @@
             background: #f9f9f9;
         }
 
-        .table-wrap {
+        .table-wrap,
+        .table-scroll {
             max-height: 420px;
             overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        .table-scroll {
+            max-height: none;
+        }
+
+        .model-details-table {
+            min-width: 900px;
+        }
+
+        .model-details-table th:not(:first-child),
+        .model-details-table td:not(:first-child) {
+            white-space: nowrap;
+        }
+
+        .model-details-table th:first-child,
+        .model-details-table td:first-child {
+            width: 12rem;
+            min-width: 12rem;
+            max-width: 12rem;
+            overflow-wrap: anywhere;
         }
 
         .heatmap {
@@ -191,14 +218,37 @@
             font-weight: 600;
             position: sticky;
             top: 0;
-            cursor: pointer;
-            user-select: none;
         }
 
-        .heatmap th:hover { background: #eef; }
         .heatmap th .sort-arrow { font-size: 0.6rem; margin-left: 0.2rem; }
-        .heatmap td:first-child { text-align: left; font-weight: 600; background: #fafafa; position: sticky; left: 0; z-index: 1; }
-        .heatmap th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; }
+        .heatmap td:first-child,
+        .heatmap th:first-child {
+            width: 10rem;
+            min-width: 10rem;
+            max-width: 10rem;
+            text-align: left;
+            overflow-wrap: anywhere;
+            white-space: normal;
+        }
+        .heatmap td:first-child { font-weight: 600; background: #fafafa; position: sticky; left: 0; z-index: 1; }
+        .heatmap th:first-child { position: sticky; left: 0; z-index: 2; }
+
+        .heatmap-sort {
+            display: block;
+            width: 100%;
+            padding: 0;
+            color: inherit;
+            font: inherit;
+            text-align: inherit;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+        }
+
+        .heatmap-sort:hover,
+        .heatmap-sort:focus-visible { color: #4338ca; }
+
+        .table-scroll-hint { display: none; }
 
         .badge {
             padding: 0.15rem 0.4rem;
@@ -208,6 +258,7 @@
         }
 
         .badge-mla { background: #e9d5ff; color: #7c3aed; }
+        .badge-msa { background: #ffe4e6; color: #e11d48; }
         .badge-mha { background: #d1fae5; color: #059669; }
         .badge-swa { background: #fef3c7; color: #d97706; }
         .badge-hyb { background: #dbeafe; color: #2563eb; }
@@ -229,6 +280,26 @@
             .scatter-col { min-width: 100%; }
             .control-group.compact,
             .slider-group.compact { max-width: none; }
+
+            .card { padding: 0.75rem; }
+
+            .model-details-table { min-width: 780px; }
+
+            .model-details-table th:first-child,
+            .model-details-table td:first-child,
+            .heatmap th:first-child,
+            .heatmap td:first-child {
+                width: 7.5rem;
+                min-width: 7.5rem;
+                max-width: 7.5rem;
+            }
+
+            .table-scroll-hint {
+                display: block;
+                margin-bottom: 0.4rem;
+                font-size: 0.75rem;
+                color: #666;
+            }
         }
     </style>
 </head>
@@ -258,18 +329,18 @@
                     <label for="benchmark-seq-len">Benchmark Seq Len: <span id="benchmark-seq-len-value">131,072</span></label>
                     <input type="number" id="benchmark-seq-len" min="1" step="1024" value="131072">
                     <div class="preset-row">
-                        <button type="button" class="preset-btn" onclick="setBenchmarkSeqLen(32768)">32K</button>
-                        <button type="button" class="preset-btn" onclick="setBenchmarkSeqLen(100000)">100K</button>
-                        <button type="button" class="preset-btn" onclick="setBenchmarkSeqLen(131072)">128K</button>
+                        <button type="button" class="preset-btn" data-benchmark-seq-len="32768">32K</button>
+                        <button type="button" class="preset-btn" data-benchmark-seq-len="100000">100K</button>
+                        <button type="button" class="preset-btn" data-benchmark-seq-len="131072">128K</button>
                     </div>
                 </div>
                 <div class="control-group">
                     <label for="batch-gpu-memory">GPU Memory: <span id="batch-gpu-memory-value">192 GB</span></label>
                     <input type="range" id="batch-gpu-memory" min="1" max="280" value="192">
                     <div class="preset-row">
-                        <button type="button" class="preset-btn" onclick="setGpuMemory(80)">80</button>
-                        <button type="button" class="preset-btn" onclick="setGpuMemory(192)">192</button>
-                        <button type="button" class="preset-btn" onclick="setGpuMemory(280)">280</button>
+                        <button type="button" class="preset-btn" data-gpu-memory="80">80</button>
+                        <button type="button" class="preset-btn" data-gpu-memory="192">192</button>
+                        <button type="button" class="preset-btn" data-gpu-memory="280">280</button>
                     </div>
                 </div>
                 <div class="control-group compact">
@@ -302,7 +373,7 @@
         </div>
 
         <div class="card">
-            <h2>Intelligence vs Max Concurrent Requests <button class="download-btn" onclick="downloadChart('benchmarkChart', 'intelligence-vs-max-reqs', 'Intelligence vs Max Concurrent Requests')">PNG</button></h2>
+            <h2>Intelligence vs Max Concurrent Requests <button type="button" class="download-btn" data-download-canvas="benchmarkChart" data-download-filename="intelligence-vs-max-reqs" data-download-title="Intelligence vs Max Concurrent Requests">PNG</button></h2>
             <p id="benchmark-status" class="status"></p>
             <div class="chart-container-tall">
                 <canvas id="benchmarkChart"></canvas>
@@ -310,12 +381,13 @@
         </div>
 
         <div class="card">
-            <h2>Effective KV Cache Bytes per Token @100K <button class="download-btn" onclick="downloadChart('barChart', 'effective-kv-bytes-per-token-100k', 'Effective KV Cache Bytes per Token @100K')">PNG</button></h2>
+            <h2>Effective KV Cache Bytes per Token @100K <button type="button" class="download-btn" data-download-canvas="barChart" data-download-filename="effective-kv-bytes-per-token-100k" data-download-title="Effective KV Cache Bytes per Token @100K">PNG</button></h2>
             <div class="chart-container">
                 <canvas id="barChart"></canvas>
             </div>
             <div class="legend-note">
                 <span class="badge badge-mla">MLA</span> Multi-head Latent Attention |
+                <span class="badge badge-msa">MSA</span> MiniMax Sparse Attention |
                 <span class="badge badge-mha">MHA</span> Multi-Head Attention |
                 <span class="badge badge-swa">SWA</span> Sliding Window.
                 Effective bytes/token is request KV/state at 100K tokens divided by 100K.
@@ -326,13 +398,13 @@
             <h2>Model Size vs Effective KV Cache Bytes per Token @100K</h2>
             <div class="scatter-row">
                 <div class="scatter-col">
-                    <h3>Active Parameters <button class="download-btn" onclick="downloadChart('scatterChartActive', 'active-params-vs-effective-kv-100k', 'Active Parameters vs Effective KV Cache Bytes per Token @100K')">PNG</button></h3>
+                    <h3>Active Parameters <button type="button" class="download-btn" data-download-canvas="scatterChartActive" data-download-filename="active-params-vs-effective-kv-100k" data-download-title="Active Parameters vs Effective KV Cache Bytes per Token @100K">PNG</button></h3>
                     <div class="chart-container-half">
                         <canvas id="scatterChartActive"></canvas>
                     </div>
                 </div>
                 <div class="scatter-col">
-                    <h3>Total Parameters <button class="download-btn" onclick="downloadChart('scatterChartTotal', 'total-params-vs-effective-kv-100k', 'Total Parameters vs Effective KV Cache Bytes per Token @100K')">PNG</button></h3>
+                    <h3>Total Parameters <button type="button" class="download-btn" data-download-canvas="scatterChartTotal" data-download-filename="total-params-vs-effective-kv-100k" data-download-title="Total Parameters vs Effective KV Cache Bytes per Token @100K">PNG</button></h3>
                     <div class="chart-container-half">
                         <canvas id="scatterChartTotal"></canvas>
                     </div>
@@ -342,22 +414,25 @@
 
         <div class="card">
             <h2>KV Cache per Request at Sequence Length</h2>
-            <div style="overflow-x: auto;">
+            <p class="table-scroll-hint">Swipe horizontally to view all columns.</p>
+            <div class="table-scroll">
                 <div id="kvHeatmap"></div>
             </div>
         </div>
 
         <div class="card">
             <h2>Max Concurrent Requests at Sequence Length</h2>
-            <div style="overflow-x: auto;">
+            <p class="table-scroll-hint">Swipe horizontally to view all columns.</p>
+            <div class="table-scroll">
                 <div id="batchHeatmap"></div>
             </div>
         </div>
 
         <div class="card">
             <h2>Model Details</h2>
+            <p class="table-scroll-hint">Swipe horizontally to view all columns.</p>
             <div class="table-wrap">
-                <table>
+                <table class="model-details-table">
                     <thead>
                         <tr>
                             <th>Model</th>

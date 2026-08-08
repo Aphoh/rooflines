@@ -82,6 +82,7 @@ export function expandLayerPattern(rawConfig: ModelArchitecture): ModelArchitect
   for (let i = 0; i < config.layer_pattern.repeat; i += 1) {
     layerTypes.push(...config.layer_pattern.sequence);
   }
+  layerTypes.push(...(config.layer_pattern.suffix || []));
 
   return {
     ...config,
@@ -113,6 +114,15 @@ function isNemotronH(config: ModelArchitecture): boolean {
   return (
     config.model_type === "nemotron_h" ||
     (config.architectures || []).includes("NemotronHForCausalLM")
+  );
+}
+
+function isMiniMaxM3(config: ModelArchitecture): boolean {
+  return (
+    config.model_type === "minimax_m3_vl" ||
+    (config.architectures || []).some((architecture) =>
+      architecture.startsWith("MiniMaxM3Sparse"),
+    )
   );
 }
 
@@ -286,6 +296,65 @@ function calculateGemma4KVCache(config: ModelArchitecture): KvCacheResult {
   };
 }
 
+function calculateMiniMaxM3KVCache(config: ModelArchitecture): KvCacheResult {
+  const numLayers = config.num_hidden_layers || 60;
+  const numKVHeads = config.num_key_value_heads || config.num_attention_heads || 4;
+  const headDim = config.head_dim || 128;
+  const vHeadDim = config.v_head_dim || headDim;
+  const sparseConfig = config.sparse_attention_config;
+  const sparseFrequency = sparseConfig?.sparse_attention_freq || [];
+  const disableIndexValue = sparseConfig?.sparse_disable_index_value || [];
+  const sparseLayerIds = Array.from({ length: numLayers }, (_, layerId) => layerId).filter(
+    (layerId) => (sparseFrequency[layerId] ?? 0) !== 0,
+  );
+  const denseLayers = numLayers - sparseLayerIds.length;
+  const indexDim = sparseConfig?.sparse_index_dim || 128;
+  const indexKOnlyLayers = sparseLayerIds.filter(
+    (layerId) => (disableIndexValue[layerId] ?? 0) !== 0,
+  ).length;
+  const indexKVLayers = sparseLayerIds.length - indexKOnlyLayers;
+  const mainElementsPerToken = numLayers * numKVHeads * (headDim + vHeadDim);
+  // sparse_num_index_heads is the number of index query heads. SGLang stores
+  // one shared index K head, plus an optional index V head, per sparse layer.
+  const indexElementsPerToken = indexDim * (indexKOnlyLayers + 2 * indexKVLayers);
+  const mainCacheBytesPerToken = {
+    bf16: mainElementsPerToken * BYTES_PER_DTYPE.bf16,
+    fp8: mainElementsPerToken * BYTES_PER_DTYPE.fp8,
+  };
+  const indexCacheBytesPerToken = {
+    bf16: indexElementsPerToken * BYTES_PER_DTYPE.bf16,
+    fp8: indexElementsPerToken * BYTES_PER_DTYPE.fp8,
+  };
+
+  return {
+    bf16: mainCacheBytesPerToken.bf16 + indexCacheBytesPerToken.bf16,
+    fp8: mainCacheBytesPerToken.fp8 + indexCacheBytesPerToken.fp8,
+    useMLA: false,
+    useMSA: true,
+    slidingWindow: null,
+    numLayers,
+    kvHeads: numKVHeads,
+    headDim,
+    vHeadDim,
+    numFullLayers: denseLayers,
+    numSlidingLayers: 0,
+    numLinearLayers: 0,
+    numNoAttentionLayers: 0,
+    hasHybrid: false,
+    hasHybridLinear: false,
+    maxCtx: config.max_position_embeddings || 1048576,
+    fixedPerRequest: 0,
+    miniMaxM3: {
+      denseLayers,
+      sparseLayers: sparseLayerIds.length,
+      indexKOnlyLayers,
+      indexKVLayers,
+      mainCacheBytesPerToken,
+      indexCacheBytesPerToken,
+    },
+  };
+}
+
 function calculateMamba2StateBytesPerLayer(config: ModelArchitecture, bytesPerElement: number): number {
   const numHeads = config.mamba_num_heads || 128;
   const headDim = config.mamba_head_dim || 64;
@@ -316,6 +385,7 @@ export function calculateKVCache(rawConfig: ModelArchitecture): KvCacheResult {
   const config = expandLayerPattern(rawConfig);
   if (isDeepSeekV4(config)) return calculateDeepSeekV4KVCache(config);
   if (isGemma4(config)) return calculateGemma4KVCache(config);
+  if (isMiniMaxM3(config)) return calculateMiniMaxM3KVCache(config);
 
   const numLayers = config.num_hidden_layers || 32;
   const useMLA = isMLA(config);
@@ -345,8 +415,9 @@ export function calculateKVCache(rawConfig: ModelArchitecture): KvCacheResult {
     const kvLoraRank = config.kv_lora_rank || 512;
     const qkRopeHeadDim = config.qk_rope_head_dim || 64;
     const latentDim = kvLoraRank + qkRopeHeadDim;
-    bf16 = tokenKVLayers * latentDim * BYTES_PER_DTYPE.bf16;
-    fp8 = tokenKVLayers * latentDim * BYTES_PER_DTYPE.fp8;
+    const mlaCacheDtype = config.mla_kv_dtype;
+    bf16 = tokenKVLayers * latentDim * BYTES_PER_DTYPE[mlaCacheDtype || "bf16"];
+    fp8 = tokenKVLayers * latentDim * BYTES_PER_DTYPE[mlaCacheDtype || "fp8"];
     kvHeads = 1;
     headDim = latentDim;
     vHeadDim = latentDim;
@@ -459,6 +530,7 @@ export function getCapacity(
 
 export function getModelType(result: KvCacheResult): { label: string; className: string } {
   if (result.deepseekV4) return { label: "DSV4", className: "badge-mla" };
+  if (result.useMSA) return { label: "MSA", className: "badge-msa" };
   if (result.hasHybridLinear) return { label: "Hybrid-Lin", className: "badge-hyb" };
   if (result.useMLA) return { label: "MLA", className: "badge-mla" };
   if (result.hasHybrid) return { label: "Hybrid-SWA", className: "badge-swa" };

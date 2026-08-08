@@ -9,5 +9,8 @@
     "fetch-aa": "bun scripts/fetch-aa.ts",
     "serve": "bun scripts/serve-dist.ts",
     "test": "bun test"
+  },
+  "dependencies": {
+    "chart.js": "4.5.1"
   }
 }

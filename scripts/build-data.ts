@@ -142,7 +142,8 @@ const aaIndex = buildArtificialAnalysisIndex(aaModels);
 
 let matchedModelCount = 0;
 const models = manualModels.map((manual) => {
-  const artificialAnalysis = matchArtificialAnalysisModel(manual, aaIndex);
+  const artificialAnalysis =
+    matchArtificialAnalysisModel(manual, aaIndex) ?? manual.artificialAnalysisFallback ?? null;
   if (artificialAnalysis) matchedModelCount += 1;
 
   return {

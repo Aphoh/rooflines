@@ -5,6 +5,7 @@ export type LayerType = "full_attention" | "sliding_attention" | "linear_attenti
 export interface LayerPattern {
   sequence: LayerType[];
   repeat: number;
+  suffix?: LayerType[];
 }
 
 export interface ModelArchitecture {
@@ -32,6 +33,8 @@ export interface ModelArchitecture {
   hybrid_override_pattern?: string;
   kv_lora_rank?: number;
   qk_rope_head_dim?: number;
+  /** Physical dtype used for MLA KV pages when it differs from the UI scenario. */
+  mla_kv_dtype?: KvDtype;
   sliding_window_size?: number;
   swa_head_dim?: number;
   swa_v_head_dim?: number;
@@ -54,6 +57,18 @@ export interface ModelArchitecture {
   mamba_head_dim?: number;
   ssm_state_size?: number;
   conv_kernel?: number;
+  sparse_attention_config?: {
+    use_sparse_attention?: boolean;
+    sparse_index_dim?: number;
+    sparse_num_index_heads?: number;
+    sparse_topk_blocks?: number;
+    sparse_block_size?: number;
+    sparse_disable_index_value?: number[];
+    sparse_score_type?: string;
+    sparse_init_block?: number;
+    sparse_local_block?: number;
+    sparse_attention_freq?: number[];
+  };
   total_params_b?: number;
   active_params_b?: number;
 }
@@ -65,6 +80,7 @@ export interface ManualModel {
     slug?: string;
     aliases?: string[];
   };
+  artificialAnalysisFallback?: ArtificialAnalysisBenchmark;
   architecture: ModelArchitecture;
 }
 
@@ -129,6 +145,7 @@ export interface KvCacheResult {
   numNoAttentionLayers: number;
   hasHybrid: boolean;
   hasHybridLinear: boolean;
+  useMSA?: boolean;
   maxCtx: number;
   fixedPerRequest: number;
   fixedPerRequestByDtype?: Partial<Record<KvDtype, number>>;
@@ -144,6 +161,14 @@ export interface KvCacheResult {
     indexerCacheBytesPerToken: number;
     fixedSwaBytesPerRequest: number;
     fixedCompressorBytesPerRequest: number;
+  };
+  miniMaxM3?: {
+    denseLayers: number;
+    sparseLayers: number;
+    indexKOnlyLayers: number;
+    indexKVLayers: number;
+    mainCacheBytesPerToken: Record<KvDtype, number>;
+    indexCacheBytesPerToken: Record<KvDtype, number>;
   };
 }
 
